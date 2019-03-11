@@ -1,0 +1,750 @@
+---
+title: "Spatial Flows Modelling with **R**"
+author: "T. Laurent, P. Margaretic, C. Thomas-Agnan"
+date: "March 11, 2019"
+output:
+  html_document:
+    highlight: tango
+    number_sections: yes
+    toc: yes
+    toc_depth: 2
+---
+<link href="markdown7.css" rel="stylesheet">
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Packages needed:
+
+```{r, message = F}
+require("arcdiagram") # representation of flows
+require("cartography")# representation of spatial data
+require("haven")      # import stata files
+require("Matrix")     # sparse matrix
+require("rgdal")      # import spatial data
+require("spdep")      # spatial econometrics modelling
+require("tidyverse")  # tidyverse data
+require("maptools")   # spatial 
+```
+
+
+# How presenting the data in practice #
+
+## Simulated example ##
+
+Let consider the example used in Thomas-Agnan and LeSage (2014) in section 83.5.1. First, we define the variables used in the space of the $n$ spatial regions. 
+
+### Spatial flows data storage when $N = n^2$ ###
+
+When the number of flows $N$ is equal to $n^2$ where $n$ is the number of spatial regions, users can simplify the presentations of the data.  
+
+We consider $n = 8$ regions noted $R_1, R_2, ..., R_8$:
+
+```{r}
+n <- 8
+id_region <- paste0("R", 1:8)
+```
+
+In Thomas-Agnan and LeSage (2014), the single vector $x' = (40, 30, 20, 10, 7, 10, 15, 25)$ is used. Hereby, we use a second variable to let our example more general, so we have the case where $R = 2$. Here, we store the explanatory variables in a **data.frame** which is the standard form for collecting the data with **R**. 
+
+```{r}
+set.seed(123)
+x <- data.frame(id = id_region,
+                x1 = c(40, 30, 20, 10, 7, 10, 15, 25), 
+                x2 = runif(n),
+                row.names = "id")
+R <- ncol(x)
+```
+
+A set of $n$ latitude and longitude coordinates (both equal to $1, 2, ..., 8$) is used. We used the **Spatial** norm proposed by Pebesma and Bivand (2005).
+
+```{r}
+x$long <- 1:8
+x$lat <- 1:8
+coordinates(x) <- ~ long + lat
+plot(x, axes = T)
+text(coordinates(x), id_region, pos = 2)
+```
+
+We define the associated spatial weight matrix $W$ of size $n \times n$ based on two nearest (distanced) neighbors. Note that when the number of flows $N = n^2$, we do not need to build the spatial weight matrices $W_o$, $W_d$, $W_w$ of size $n^2 \times n^2$. The computations will be done by using the properties of the Kronecker products.
+
+```{r}
+w <- 0.5 * matrix(c(0, 1, 1, 0, 0, 0, 0, 0,
+                    1, 0, 1, 0, 0, 0, 0, 0,
+                    0, 1, 0, 1, 0, 0, 0, 0,
+                    0, 0, 1, 0, 1, 0, 0, 0,
+                    0, 0, 0, 1, 0, 1, 0, 0,
+                    0, 0, 0, 0, 1, 0, 1, 0,
+                    0, 0, 0, 0, 0, 1, 0, 1,
+                    0, 0, 0, 0, 0, 1, 1, 0), 
+                  8, 8, byrow = T)
+```
+
+Besides, when $N = n^2$, the explanatory variables can be presented in the dimension $n \times p$ rather than the full dimension $n^2 \times p$ of flows.  
+
+Finally, the distances between flows can be presented in a matrix of size $n \times n$.
+
+```{r}
+G <- as.matrix(dist(coordinates(x)))
+```
+
+We will see that the dependent variables $Y$ will be presented also in a $n \times n$ matrix format.
+
+### Spatial flows data storage when $N \leq n^2$ ###
+
+When the number of flows $N$ is lower than $n^2$, we have to present the data differently than the previous section. This could happens when users decide to drop some observations which are badly informed or are extreme values.
+
+
+#### Explanatory variables ####
+
+We define the explanatory variables in the space of the flows $N \times p$. We use the **data.frame** format which contains one column noted **origin** and one column noted **dest**. The data are presented as in Lesage and Pace (2009) (see formula (2)).
+
+```{r}
+flows_data <- data.frame(origin = rep(id_region, each = n),
+                         dest = rep(id_region, n))
+```
+
+Then, we have to transform the explanatory variables in the regions space into the spatial flows space and add it to the **data.frame**. For doing this, we use the function *merge()* successively two times: the first time for defining the **origin** variable and the second time for defining the **dest** variable:
+
+```{r}
+flows_data <- merge(flows_data, x@data, by.x = "dest", by.y = "row.names")
+flows_data <- merge(flows_data, x@data, by.x = "origin", by.y = "row.names")
+names(flows_data)[3:ncol(flows_data)] <- paste0(names(x@data), 
+  c(rep("_d", ncol(x@data)), rep("_o", ncol(x@data))))
+```
+
+**Important step:** the step of merging has disordered the observations. The idea is to keep the data ordered firstly by origin and secondly by destination. Then we print the first 5 flows :
+
+```{r}
+flows_data <- flows_data[order(flows_data$origin, flows_data$dest), ]
+head(flows_data)
+```
+
+
+To produce an $n^2$ vector of distances $g$:
+
+```{r}
+flows_data$g <- as.vector(G)
+G_dot <- flows_data$g  - mean(G)
+```
+
+#### Spatial weight matrices $W_o$, $W_d$, $W_w$ ####
+
+To define the matrices $W_o$, $W_d$, $W_w$, we use the Kronecker product by using the specificity of sparse matrices (functions *kronecker()* and *Diagonal()* in package **Matrix**):
+
+```{r}
+W_d <- kronecker(Diagonal(n), w)
+W_o <- kronecker(w, Diagonal(n))
+W_w <- kronecker(as(w, "Matrix"), w)
+```
+
+### DGP of the $Y$ variables ###
+
+We simulate 9 different spatial autoregressive interaction models: 
+
+$y_9 = (I_{N}-\rho_oW_o-\rho_dW_d+\rho_wW_w)^{-1}(Z\delta + \epsilon)$,
+
+$y_8 = (I_{N}-\rho_oW_o-\rho_dW_d+\rho_d \rho_oW_w)^{-1}(Z\delta + \epsilon)$,
+
+$y_7 = (I_{N}-\rho_oW_o-\rho_dW_d)^{-1}(Z\delta + \epsilon)$,
+
+$y_6 = (I_{N}-\rho_{odw}(W_o + W_d + W_w)/3)^{-1}(Z\delta + \epsilon)$,
+
+$y_5 = (I_{N}-\rho_{od}(W_o + W_d)/2)^{-1}(Z\delta + \epsilon)$,
+
+$y_4 = (I_{N}-\rho_wW_w)^{-1}(Z\delta + \epsilon)$,
+
+$y_3 = (I_{N}-\rho_oW_o)^{-1}(Z\delta + \epsilon)$,
+
+$y_2 = (I_{N}-\rho_dW_d)^{-1}(Z\delta + \epsilon)$,
+
+$y_1 = (Z\delta + \epsilon)$,
+
+with $Z=(1_{N}, X_o, X_d, g)$ and $\delta = (\alpha, \beta_o, \beta_d, \gamma)$. We generated a set of flows $Y$ with $\alpha = 0$, $\beta_d = (0.5, 0)$, $\beta_o = (0, 5)$, $\gamma = -0.5$, $\rho_d = 0.4$, $\rho_o = 0.4$, and $\rho_w = 0.2$.
+
+```{r}
+N <- n^2
+delta <- c(0, 0.5, 0, 0, 5, -0.5)
+id_x_d <- substr(names(flows_data), nchar(names(flows_data)) - 1, 
+                 nchar(names(flows_data))) == "_d"
+x_d <- as(flows_data[ , id_x_d], "matrix")
+id_x_o <- substr(names(flows_data), nchar(names(flows_data)) - 1, 
+                 nchar(names(flows_data))) == "_o"
+x_o <- as(flows_data[ , id_x_o], "matrix")
+Z <- cbind(rep(1, N), x_d, x_o, flows_data$g)
+rho_d <- 0.4
+rho_o <- 0.3
+rho_w <- -0.4
+```
+
+To simulate the data:
+```{r}
+set.seed(123)
+z_delta <- Z %*% delta + rnorm(N)
+```
+
+Note that the $Y$ variables is presented a $n \times n$ matrix when the number of flows is equal to $N = n^2$, otherwise we will present $Y$ as a vector of size $N$.
+
+```{r}
+flows_data$y_9 <- as.numeric(solve(diag(N) - rho_d * W_d - rho_o * W_o - rho_w * W_w, 
+                      z_delta))
+Y_9 <- matrix(flows_data$y_9, n, n)
+```
+
+```{r}
+flows_data$y_8 <- as.numeric(solve(diag(N) - rho_d * W_d - rho_o * W_o + rho_d * rho_o * W_w, 
+                      z_delta))
+Y_8 <- matrix(flows_data$y_8, n, n)
+```
+
+```{r}
+flows_data$y_7 <- as.numeric(solve(diag(N) - rho_d * W_d - rho_o * W_o, 
+                      z_delta))
+Y_7 <- matrix(flows_data$y_7, n, n)
+```
+
+```{r}
+flows_data$y_6 <- as.numeric(solve(diag(N) - rho_d * (W_d + W_o + W_w)/3, 
+                      z_delta))
+Y_6 <- matrix(flows_data$y_6, n, n)
+```
+
+```{r}
+flows_data$y_5 <- as.numeric(solve(diag(N) - rho_d * (W_d + W_o)/2, 
+                      z_delta))
+Y_5 <- matrix(flows_data$y_5, n, n)
+```
+
+```{r}
+flows_data$y_4 <- as.numeric(solve(diag(N) - rho_w * W_w, 
+                      z_delta))
+Y_4 <- matrix(flows_data$y_4, n, n)
+```
+
+```{r}
+flows_data$y_3 <- as.numeric(solve(diag(N) - rho_o * W_o, 
+                      z_delta))
+Y_3 <- matrix(flows_data$y_3, n, n)
+```
+
+```{r}
+flows_data$y_2 <- as.numeric(solve(diag(N) - rho_d * W_d, 
+                      z_delta))
+Y_2 <- matrix(flows_data$y_2, n, n)
+```
+
+```{r}
+flows_data$y_1 <- as.numeric(z_delta)
+Y_1 <- matrix(z_delta, n, n)
+```
+
+Finally, the data set corresponding to the flows is presented in that form :
+
+```{r}
+head(flows_data)
+```
+
+
+## True data 
+
+This dataset was found here: https://www.wto.org/english/res_e/booksp_e/advancedwtounctad2016_e.pdf
+
+p.39: "The  primary  source  of  information  for  aggregated  (country-level)  bilateral  trade  flows  is  the  International Monetary Fund (IMF)'s Direction of Trade Statistics (DOTS). The database covers 184 countries. Annual data are available from 1947, while monthly and quarterly data start from 1960.  Data  are  reported  in  US  dollars.  Relying  on  DOTS  and  other  national  sources  of  data,  Barbieri and Keshk have created a database (Correlates of War Project) that tracks total national trade and bilateral trade flows (imports and exports) between states from 1870-2009 in current US dollars."
+
+p.40 : "In  all  the  applications  presented  in  this  chapter,  the  results  are  obtained  from  the  same  balanced panel data covering the aggregate manufacturing sector of 69 countries over the period 1986-2006. The  sample  combines  data  from  several  sources.  Most  importantly,  it  includes consistently constructed international and intra-national trade flows data, which were assem-bled and provided by Thomas Zylkin. The original sources for the international trade data are the UN COMTRADE database and the CEPII TradeProd database. COMTRADE is the primary data source and TradeProd is used for instances when it includes positive flows for observa-tions when no trade flows are reported in COMTRADE. Intra-national trade for each country is constructed as the difference between total manufacturing production and total manufacturing exports. Importantly, both of these variables are reported on a gross basis, which ensures con-sistency between intra-national and international trade. Three sources are used to construct the production  data:  the  UN  UNIDO  INDSTAT  database,  the  CEPII  TradeProd  database,  and  the  World Bank’s TPP database.20 The data on RTAs were taken from Mario Larch’s Regional Trade Agreements Database. Finally, all standard gravity variables including distance, contiguous bor-ders, common language, and colonial ties are from the CEPII GeoDist database. An important advantage  of  the  GeoDist  database  is  that  the  weighted-average  methods  used  to  construct  distance ensure consistency between the measures of intra-national and international distance, because each method uses population-weighted distances across the major economic centres within or across countries, respe"
+
+To import and prepare the data:
+
+```{r}
+source("./R/trade_data.R")
+```
+
+The flows are presented in the object **wto**. The number of flows is equal to 4761. The variable of interest is the variable **trade** and the distances between origin and destination are given in the variable **DIST**.
+
+```{r}
+head(wto)
+dim(wto)
+```
+
+The spatial units (the countries) are presented in the object **wto_spatial**. The number of countries is equal to 69. We define the variable **GDP** which is the GDP given by the United Nations in 2017 (https://en.wikipedia.org/wiki/List_of_countries_by_GDP_(nominal)). 
+
+```{r}
+dim(wto_spatial)
+head(wto_spatial@data)
+```
+
+### The number of flows $N=n^2$  
+
+The data consists in $N = 4761$ flows observed on $n=69$ countries. As $N=n^2$, we first present the flows and the distances between origin/destination as matrices $Y$ and $G$ of size $69 \times 69$.
+
+```{r}
+Y_wto <- matrix(wto$trade, 69, 69)
+G_wto <- matrix(wto$DIST, 69, 69)
+```
+
+
+#### Spatial weight matrix 
+
+We now want to associate the spatial contours to the countries. We fist deal with Hong-Kong which is not included in our data basis which contains the spatial polygons. For creating it, we decide to associate the same shape than Macau and translate slightly the polygon. 
+
+We compute the spatial weight matrix based on the 4 nearest neighbours:
+
+```{r}
+ppv1 <- knn2nb(knearneigh(coordinates(wto_spatial), k = 4, longlat = T), sym = T)
+wto_spatial_weight <- nb2listw(ppv1)
+wto_W <- listw2mat(wto_spatial_weight)
+```
+
+We represent the links on the map:
+
+```{r}
+par(bg = "grey25")
+plot(world, border = "grey", lwd = 0.5)
+plot(wto_spatial, col = "grey13", border = "grey25", 
+     bg = "grey25", lwd = 0.5, add = T)
+plot(ppv1, coordinates(wto_spatial), add = T, col = "yellow")
+```
+
+
+### The number of flows $N < n^2$  
+
+If we decide to filter the flows and conserve only trades which are higher than 0, we have to present the data differently.
+
+First, we add the DGP to the data observed at the flows level:
+
+```{r}
+wto$DGP_d <- wto_spatial@data$GDP
+wto$DGP_o <- rep(wto_spatial@data$GDP, each = 69)
+```
+
+Then, we identify the ids of the flows we want to drop:
+
+```{r}
+ind_filter <- wto$exporter != wto$importer & wto$trade > 0
+wto_filter <- wto[ind_filter, ]
+```
+
+
+
+#### Spatial weight matrices $W_o$, $W_d$, $W_w$ ####
+
+To define the matrices $W_o$, $W_d$, $W_w$, we use the Kronecker product by using the specificity of sparse matrices:
+
+```{r}
+wto_W_d <- kronecker(Diagonal(69), wto_W)
+wto_W_o <- kronecker(wto_W, Diagonal(69))
+wto_W_w <- kronecker(as(wto_W, "Matrix"), wto_W)
+```
+
+Then, we only select the flows that we are interested in:
+
+```{r}
+wto_W_d_filter <- wto_W_d[ind_filter, ind_filter]
+wto_W_o_filter <- wto_W_o[ind_filter, ind_filter]
+wto_W_w_filter <- wto_W_w[ind_filter, ind_filter]
+```
+
+
+# Vizualisation #
+
+We present in this section some **R** packages which permit to visualize spatial flows data.
+
+## Simulated example ##
+
+We use the package **arcdiagram** (see https://github.com/gastonstat/arcdiagram) which is appropriated for our simulated data because our spatial flows can be assimilated as a graph structure. Indeed, the distances between two consecutives geographical observations are exactly the same and thus we can represent them as nodes. 
+
+In the graph structure, one node can not be linked with itself. In other term, for plotting the intra flow, we will plot a node with a size proportionnal to the value of the intra flows. For doing this, we first need to define the minimum and maximum cex for representing the nodes :
+
+```{r}
+max_symbol_size <- 4
+min_symbol_size <- 1
+```
+
+And then, compute the cex of each node:
+```{r}
+plotvar <- diag(Y_8)
+symbol_size <- ((plotvar - min(plotvar))/(max(plotvar) - min(plotvar))*
+                  (max_symbol_size - min_symbol_size) + min_symbol_size)
+```
+
+Then, we want to represent the flows with a width proportionnal to the value of the flows. Thus, we do something similar:
+
+```{r}
+max_lwd <- 20
+min_lwd <- 1
+flows_lwd <- ((flows_data[, "y_8"] - min(flows_data[, "y_8"]))/
+                (max(flows_data[, "y_8"]) - min(flows_data[, "y_8"]))*
+                  (max_lwd - min_lwd) + min_lwd)
+```
+
+Finally, we represent the flows such that the flows above corresponds to the flows between a left node to a right node and the flows below correspond to the flows between the right nodes to the left nodes. We decide to plot with a strong color the flows whose origin and destination are neighbors.  
+
+```{r}
+ arcplot(as(flows_data[, 1:2], "matrix"), labels = id_region, las = 1, 
+         show.nodes = TRUE, 
+         above = as.character(flows_data[, 1]) <= as.character(flows_data[, 2]),
+         cex.nodes = symbol_size, lwd.arcs = flows_lwd,
+         col.arcs = hsv(flows_data[, "y_8"]/max(flows_data[, "y_8"]), 
+                        alpha = ifelse(as.vector(t(w)) > 0, 0.8, 0.05)), 
+         col.nodes = hsv(plotvar/max(plotvar), 0.5))
+```
+
+
+## True data ##
+
+We use here the package **Cartography** for representing the flows. 
+
+```{r}
+mtq_mob <- getLinkLayer(
+  x = wto_spatial, 
+  xid = "NOM", 
+  df = wto, 
+  dfid = c("exporter","importer")
+)
+
+par(bg = "grey25")
+# plot municipalities
+plot(world, border = "grey", lwd = 0.5)
+plot(wto_spatial, col = "grey13", border = "grey25", 
+     bg = "grey25", lwd = 0.5, add = T)
+# plot graduated links
+gradLinkTypoLayer(
+  x = mtq_mob, 
+  xid = c("exporter","importer"),
+  df = wto, 
+  dfid = c("exporter","importer"),
+  var = "trade", 
+  breaks = c(25000, 50000, 100000, 1000000, 5000000),
+  lwd = c(1, 4, 8, 16),
+  var2 = "trade", 
+  legend.var.pos = "left",
+  legend.var.title.txt = "Nb. of\nTrade",
+) 
+
+# map layout
+layoutLayer(title = "Trades", 
+            sources = "Sources: Yotov et al., 2016",  
+            author = paste0("cartography ", packageVersion("cartography")), 
+            frame = FALSE, col = "grey25", coltitle = "white",
+            tabtitle = TRUE)
+```
+
+
+
+# Non spatial modelling #
+
+## Gravity model ##
+
+The form of the gravity model is $Y = \alpha1_{N}+X_o\beta_o+X_d\beta_d+\gamma g + \epsilon$. To solve this problem with **R**, we propose two options:
+
+* We implement the formulas proposed by LeSage and Pace (2008) which avoid to store the whole data of the explanatory variables by using the kronecker proporties.
+
+* Use the function *lm()* applied on the whole data set. 
+
+
+## LeSage and Pace (2008) estimation ##
+
+LeSage and Pace (2008) show that we can avoid to store the flows data by using the property of the Kroneker product in the space of the regions data. In their paper, they consider the case where $x$ is centered which permits some simplifications in the resolution of the problem. We call this function *gravity_model()*. It takes as input arguments : 
+
+* **x**, a **data.frame** or a matrix with explanatory variable observed on the $n$ geographical sites.
+* **Y**, the matrix of flows of size $n \times n$,
+* **G**, the matrix of distance of size $n \times n$,
+* **ind_d**, the indices of the variables in **x** which will be used at the destination,
+* **ind_o**, the indices of the variables in **x** of the variables used at the origin.
+
+
+```{r, echo = T}
+source("./R/gravity_model.R")
+```
+
+## Applications ##
+
+### With the toy data ###
+
+```{r}
+gravity_model(x = x@data, Y = Y_1, G = G, ind_d = 1, ind_o = c(1, 2))
+```
+
+We compare the results with the ones obtained with the function *lm()* :
+
+```{r}
+gravity_flows <- lm(y_1 ~ x1_d + x1_o + x2_o + g, data = flows_data)
+```
+
+The function *summary()* gives also the standard errors of the estimated coefficients and the results of the t-test. It also gives the values of the $R^2$. 
+
+```{r}
+summary(gravity_flows)
+```
+
+**Remark 1:** Unsurprisingly, we find the same values of the estimates for $\beta_o$, $\beta_d$ and $\gamma$ than those obtained with the function *gravity_model()*. The estimate of the intercept is different because the data have been centered. 
+
+**Remark 2:** to compute the estimates with function *lm()*, user needs to work with the full matrix of size $N \times 2p$ where $p$ is the number of explanatory variable. 
+
+
+### With the true data ### 
+
+```{r}
+gravity_model(x = as(wto_spatial@data[, "GDP"], "matrix"), Y = Y_wto, G = G_wto)
+```
+
+We compare the results with the ones obtained with the function *lm()* :
+
+```{r}
+gravity_flows_wto <- lm(trade ~ DGP_d + DGP_o + DIST, data = wto)
+summary(gravity_flows_wto)
+```
+
+**Remark:** in the case we want to work with the positive flows only, we can not use the function *gravity_model()* because the formula have been made by considering the case where $N = n^2$. For example :
+
+```{r}
+gravity_flows_wto_filter <- lm(trade ~ DGP_d + DGP_o + DIST, data = wto_filter)
+summary(gravity_flows_wto_filter)
+```
+
+# Spatial Modeling # 
+
+When the number of flows $N$ is equal to $n^2$, this implies some simplifications in the computations. However, this is not always the case in practice. That is why we consider the two options :
+
+* $N = n^2$
+* $N < n^2$ 
+
+## Spatial Autoregressive Interaction Models when $N = n \times n$ ##
+
+We use the Bayesian SAR method of estimates. Before estimating the parameters in the SAR flows model, we have to create intermediate functions :
+
+* *ftrace1()*, which computes the trace of spatial weight matrices $W$, $W^2$, $W^3$, ..., $W^{miter}$,
+* *fodet1()*, which computes the jacobian matrix in the case of the model (9), i.e. the model with the 3 spatial weight matrices $W_o$, $W_d$, $W_w$
+* *lndetmc()*, which computes the jacobian matrix in the case of a model with only one spatial weight matrix,
+* *c_sarf()*, which computes the log likelihood conditionnally to $\rho$.
+
+### Traces of the spatial weight matrix ###
+
+First we code the function **ftrace1()** which computes the traces of $W$, $W^2$, $W^3$, ..., $W^{miter}$.  The two possible methods are **"exact"** (based on the computation of $W$, $W^2$, $W^3$, ..., $W^{miter}$) or **"approx"** (based on an MCMC approximation, Barry and Pace, 99). The arguments **miter** corresponds to the maximum order trace desired and **riter** the maximum number of iterations used to estimate the trace.
+
+```{bash, eval = F}
+ftrace1(w, method = "exact", miter = 10, riter = 50)
+```
+
+
+```{r, echo = F}
+source("./R/ftrace1.R")
+```
+
+Example: we compute the traces on the 10 first power of the spatial weigh matrix. Here we do not use approxitimation because the size of the matrix is small
+
+```{r}
+(traces <- ftrace1(w))
+```
+
+By using the algorithm proposed by Barry and Pace (1999), the approximated traces are equal to:
+
+```{r}
+(traces_approx <- ftrace1(w, method = "approx", miter = 10, riter = 50000))
+```
+
+
+### Computation of the determinant ###
+
+#### General case with $W_o$, $W_d$, $W_w$
+
+To compute the log determinant in the case of the full model (model 9), we code the function **fodet1()**. The inputarguments are: 
+
+* **parms**, a **numeric** vector containing $\rho_1$, $\rho_2$, $\rho_3$, 
+* **traces**, a **numeric** vector containing the estimated traces of $W$, $W^2$, ...,$W^{miter}$ 
+* **n**, the size the sample. 
+
+```{bash, eval = F}
+fodet1(parms, traces, n)
+```
+
+```{r, echo = T}
+source("./R/fodet1.R")
+```
+
+
+#### Case with only one spatial weight matrix ($W_o$, $W_d$ or $W_w$)
+
+In the particular case where there is only one spatial weight matrix (model 2 to 6 in Lesage and Pace, 2008), the algorithm is much more simpler because the computation of $Ln|I_N-\rho W_S|$ where $S=o,d,w,o+d,o+d+w$ can be written directly with respect to the Jacobian of $W$. First, user has to compute the trace of the matrix $W$ by using the function *ftrace1()* and then compute the log determinant by using the function *lndetmc()*.
+
+The function takes as input argument : 
+
+* **parms**, a scalar usually corresponding to the value of $\rho$,
+* **traces** a vector of numeric corresponding to the eigen values of spatial weight matrix $W$,
+* **n**, an integer, the size of the sample.
+
+```{bash, eval = F}
+lndetmc(parms, traces, n)
+```
+
+```{r, echo = T}
+source("./R/lndetmc.R")
+```
+
+In a case of a small matrix, we use the exact values of the traces of $W$, $W^2$, $W^3$, ...
+
+```{r}
+lndetmc(0.25, traces, n)
+```
+
+In a case of a larger matrix, one can use the approximation:
+
+```{r}
+lndetmc(0.25, traces_approx, n)
+```
+
+#### Case with two spatial weight matrix 
+
+One can use the formula (29) of Lesage and Pace (2008) tu sum the log determinants of the two spatial weight matrices. For example, if $\rho_o=0.4$ and $\rho_d=0.2$, then the log determinant is equal to:
+
+```{r}
+lndetmc(0.4, traces_approx, n) + lndetmc(0.2, traces_approx, n)
+```
+
+
+
+### Evaluation of the log likelihood conditionnally to $\rho$  ###
+
+The function *c_sarf()* takes as argument :
+
+* **rho**, a vector containg the estimated values of $rho_d$, $rho_d$, $rho_w$, 
+* **sige**, the value of $\sigma^2$
+* **Q**, cross-product matrix of the various component residuals
+* **traces** a vector of numeric corresponding to the eigen values of spatial weight matrix $W$,
+* **n**, an integer, the size of the sample.
+
+```{bash, eval = F}
+c_sarf(rho, sige, Q, traces, n, nvars)
+```
+
+
+```{r, echo = T}
+source("./R/c_sarf.R")
+```
+
+
+### Function *sar_flow()* model ###
+
+It takes as input arguments : 
+
+* **x**, a **data.frame** or a matrix with explanatory variable observed on the $n$ geographical sites.
+* **Y**, the matrix of flows of size $n \times n$,
+* **G**, the matrix of distance of size $n \times n$,
+* **w**, the spatial weight matrix of size $n \times n$,
+* **ind_d**, the indices of the variables in **x** which will be used at the destination,
+* **ind_o**, the indices of the variables in **x** of the variables used at the origin.
+
+```{bash, eval = F}
+sar_flow(x, Y, G, w, ind_d = NULL, ind_o = NULL, model = "model_9")
+```
+
+```{r, echo = F}
+source("./R/sar_flow.R")
+```
+
+
+### Application on the toy data
+
+#### Model 2
+
+We evaluate the model 2 when $Y$ corresponds to DGP used with the model 2. We choose to estimate $x_1$ only at the destination and $x_2$ only at the origin. 
+
+```{r}
+system.time(sar_simu_2 <- sar_flow(x = x@data, 
+                       Y = Y_2, 
+                       G = G, 
+                       w = w,
+                       ind_d = 1,
+                       ind_o = 2,
+                       model = "model_2") 
+)
+sar_simu_2
+```
+
+#### Model 9
+
+We evaluate the model 9 when $Y$ corresponds to DGP used with the model 9. We choose to estimate $x_1$ only at the destination and $x_2$ only at the origin. 
+
+```{r, eval = F}
+system.time(sar_simu_9 <- sar_flow(x = x@data, 
+                       Y = Y_9, 
+                       G = G, 
+                       w = w,
+                       ind_d = 1,
+                       ind_o = 2,
+                       model = "model_9") 
+)
+sar_simu_9
+```
+
+### Application on the true data
+
+With the true data, we do not know which model should we use. We try here some possibilities. 
+
+#### Model 3
+
+```{r, eval = F}
+system.time(sar_true_data_3 <- sar_flow(x = wto_country[, "GDP"], 
+                       Y = Y_wto, 
+                       G = G_wto, 
+                       w = wto_W,
+                       model = "model_3") 
+)
+sar_true_data_3
+```
+
+
+## Spatial Autoregressive Interaction Models when $N < n^2$ ##
+
+In that case, the number of flows is lower than $n \times n$. In that case, users have to present the data in their full structure. 
+
+### Function *sar_flow_2()* model ###
+
+It takes as input arguments : 
+
+* **x**, a **data.frame** or a matrix with explanatory variable observed on the $N$ flows.
+* **Y**, the vector of flows of size $N$,
+* **g**, the vector of distance of size $N$,
+* **W_d**, the spatial weight matrix of size $N \times N$,
+* **W_o**, the spatial weight matrix of size $N \times N$,
+* **W_w**, the spatial weight matrix of size $N \times N$,
+* **ind_d**, the indices of the variables in **x** which will be used at the destination,
+* **ind_o**, the indices of the variables in **x** of the variables used at the origin.
+
+```{bash, eval = F}
+sar_flow_2(x, y, g, W_d, W_o, W_w, 
+           ind_d = NULL, ind_o = NULL, model = "")
+```
+
+```{r, echo = F}
+source("./R/sar_flow_2.R")
+```
+
+
+### Application on the true data
+
+#### Model 3
+
+```{r, eval = F}
+system.time(sar_mod_true_3 <- sar_flow_2(x = wto_filter[, c("DGP_d", "DGP_o")], 
+           y = wto_filter$trade, 
+           g = wto_filter$DIST, 
+           W_d = wto_W_o_filter) )
+sar_mod_true_3
+```
+
+
+
+
+## Interpreting the results ##
+
+
+
+**References**
+
+* LeSage J.P. and Pace R.K. (2008). Spatial econometric modeling of origin-destination flows. Journal of Regional Science, 48(5), 941–-967.
+
+*  Pebesma E.J. and Bivand R.S. (2005). Classes and methods for spatial data in **R**, R News, 5(2), 9--13.
+
+* Thomas-Agnan C. and LeSage J.P. (2014). Spatial Econometric OD-Flow Models. In: Fischer M., Nijkamp P. (eds) Handbook of Regional Science. Springer, Berlin, Heidelberg.
