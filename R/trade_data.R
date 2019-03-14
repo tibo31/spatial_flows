@@ -22,6 +22,10 @@ wto_country$GDP <- c(637486, 1408675, 416835, 494763, 58222, 37508, 2055512,
                      40068, 851541, 52090, 59180, 19485394, 348872)
 
 # spatial polygons
+# We now want to associate the spatial contours to the countries. 
+# We first deal with Hong-Kong which is not included in our data basis. 
+# For creating it, we decide to associate the same shape than Macau and transfer slightly the polygon. 
+
 world <- readOGR("./data/World WGS84/Pays_WGS84.shp")
 macau <- world[grep("Macau", world@data$NOM), ] 
 crds <- macau@polygons[[1]]@Polygons[[1]]@coords + 0.04
