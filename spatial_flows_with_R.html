@@ -254,7 +254,7 @@ $(document).ready(function () {
 <li><a href="#lesage-and-pace-2008-estimation"><span class="toc-section-number">3.2</span> LeSage and Pace (2008) estimation</a></li>
 <li><a href="#applications"><span class="toc-section-number">3.3</span> Applications</a></li>
 </ul></li>
-<li><a href="#spatial-modeling"><span class="toc-section-number">4</span> Spatial Modeling</a><ul>
+<li><a href="#spatial-modelling"><span class="toc-section-number">4</span> Spatial Modelling</a><ul>
 <li><a href="#spatial-autoregressive-interaction-models-when-n-n-times-n"><span class="toc-section-number">4.1</span> Spatial Autoregressive Interaction Models when <span class="math inline">\(N = n \times n\)</span></a></li>
 <li><a href="#spatial-autoregressive-interaction-models-when-n-n2"><span class="toc-section-number">4.2</span> Spatial Autoregressive Interaction Models when <span class="math inline">\(N &lt; n^2\)</span></a></li>
 <li><a href="#interpreting-the-results"><span class="toc-section-number">4.3</span> Interpreting the results</a></li>
@@ -686,8 +686,8 @@ flows_lwd &lt;-<span class="st"> </span>((flows_data[, <span class="st">&quot;y_
 </div>
 </div>
 </div>
-<div id="spatial-modeling" class="section level1">
-<h1><span class="header-section-number">4</span> Spatial Modeling</h1>
+<div id="spatial-modelling" class="section level1">
+<h1><span class="header-section-number">4</span> Spatial Modelling</h1>
 <p>When the number of flows <span class="math inline">\(N\)</span> is equal to <span class="math inline">\(n^2\)</span>, this implies some simplifications in the computations. However, this is not always the case in practice. That is why we consider the two options :</p>
 <ul>
 <li><span class="math inline">\(N = n^2\)</span></li>
@@ -794,7 +794,7 @@ flows_lwd &lt;-<span class="st"> </span>((flows_data[, <span class="st">&quot;y_
 )</code></pre></div>
 <pre><code>## ===========================================================================</code></pre>
 <pre><code>##    user  system elapsed 
-##   9.124   1.684   8.836</code></pre>
+##   9.032   1.452   8.629</code></pre>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">sar_simu_<span class="dv">2</span></code></pre></div>
 <pre><code>##                   mean   lower_05   lower_95    t_stat
 ## rho_d        0.4005488  0.3298893  0.4661617  9.294718

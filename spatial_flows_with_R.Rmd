@@ -3,7 +3,7 @@ title: "Spatial Flows Modelling with **R**"
 author: "T. Laurent, P. Margaretic, C. Thomas-Agnan"
 date: "March 14, 2019"
 output:
-  pdf_document:
+  html_document:
     highlight: tango
     number_sections: yes
     toc: yes
@@ -501,7 +501,7 @@ gravity_flows_wto_filter <- lm(trade ~ DGP_d + DGP_o + DIST, data = wto_filter)
 summary(gravity_flows_wto_filter)
 ```
 
-# Spatial Modeling # 
+# Spatial Modelling # 
 
 When the number of flows $N$ is equal to $n^2$, this implies some simplifications in the computations. However, this is not always the case in practice. That is why we consider the two options :
 
