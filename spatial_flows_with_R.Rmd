@@ -1,13 +1,16 @@
 ---
 title: "Spatial Flows Modelling with **R**"
 author: "T. Laurent, P. Margaretic, C. Thomas-Agnan"
-date: "March 14, 2019"
+date: "April 19, 2019"
 output:
   html_document:
     highlight: tango
     number_sections: yes
     toc: yes
     toc_depth: 2
+  pdf_document:
+    toc: yes
+    toc_depth: '2'
 ---
 <link href="markdown7.css" rel="stylesheet">
 
@@ -161,11 +164,11 @@ $y_2 = (I_{N}-\rho_dW_d)^{-1}(Z\delta + \epsilon)$,
 
 $y_1 = (Z\delta + \epsilon)$,
 
-with $Z=(1_{N}, X_o, X_d, g)$ and $\delta = (\alpha, \beta_o, \beta_d, \gamma)$. We generate a set of flows $Y$ with $\alpha = 0$, $\beta_d = (0.5, 0)$, $\beta_o = (0, 5)$, $\gamma = -0.5$, $\rho_d = 0.4$, $\rho_o = 0.4$, and $\rho_w = 0.2$.
+with $Z=(1_{N}, X_o, X_d, g)$ and $\delta = (\alpha, \beta_o, \beta_d, \gamma)$. We generate a set of flows $Y$ with $\alpha = 0$, $\beta_d = (0.5, 1)$, $\beta_o = (1.5, 2)$, $\gamma = -0.5$, $\rho_d = 0.4$, $\rho_o = 0.4$, and $\rho_w = 0.2$.
 
 ```{r}
 N <- n^2
-delta <- c(0, 0.5, 0, 0, 5, -0.5)
+delta <- c(0, 0.5, 1, 1.5, 2, -0.5)
 id_x_d <- substr(names(flows_data), nchar(names(flows_data)) - 1, 
                  nchar(names(flows_data))) == "_d"
 x_d <- as(flows_data[ , id_x_d], "matrix")
@@ -653,12 +656,40 @@ system.time(sar_simu_2 <- sar_flow(x = x@data,
                        Y = Y_2, 
                        G = G, 
                        w = w,
-                       ind_d = 1,
-                       ind_o = 2,
+                       ind_d = c(1, 2),
+                       ind_o = c(1, 2),
                        model = "model_2") 
 )
 sar_simu_2
 ```
+
+
+
+We compare the results with the *lagsarlm()* function and we remark that we obtain similar results :
+
+```{r}
+result_lagsarlm<- lagsarlm(y_2 ~ x1_d + x2_d + x1_o + x2_o + g, 
+                           data = flows_data, 
+                           mat2listw(W_d))
+summary(result_lagsarlm, correlation = TRUE)
+```
+
+However, we remark that we canno't use S2SLS method because of inversion problems.
+
+```{r, eval = F}
+result_s2sls<- stsls(y_2 ~ x1_d + x2_d + x1_o + x2_o + g, 
+                           data = flows_data, 
+                           mat2listw(W_d),
+                        robust = F,
+                        legacy = T,
+                        HC = "HC1")
+summary(result_lagsarlm, correlation = TRUE)
+```
+
+
+I started to code the S2SLS for a general spatial model flow (model 9). The codes are in the *s2sls()* function.
+
+
 
 #### Model 9
 
@@ -736,6 +767,51 @@ sar_mod_true_3
 
 
 ## Interpreting the results ##
+
+
+We compute the matrix $A(W) = (I_{N\times N} - \rho_oW_o -\rho_dW_d-\rho_wW_W)^{-1}$. We use the funtion *powerWeights()* which computes the power of matrix.
+
+```{bash, eval = F}
+powerWeights(W, rho, order = 250, X, 
+   tol = .Machine$double.eps^(3/5))
+```
+
+```{r, echo = F}
+source("./R/powerWeights.R")
+```
+
+#### Application on the Model 2 (simulated data)
+  
+```{r}
+W_hat <- sar_simu_2$mean[1] * W_d 
+AW <- powerWeights(W_hat, 1, order = 250, Diagonal(nrow(W_d)), 
+                   tol = .Machine$double.eps^(3/5))
+```
+
+
+Then, we compute the formula given in theorem 1. We first compute the left part of the equation:
+
+```{r}
+ res_o1 <- 0
+
+ for (k in 1:n) {
+  res_o1 <- res_o1 + sum(AW[((1:n)[(!(1:n) %in% k)]) + n * (k - 1), (1:n) + n * (k - 1)])
+ }
+
+ (res_o1 <- sar_simu_2$mean[5:6] * res_o1 / N)
+```
+
+We then compute the second part of the equation:
+
+```{r}
+ res_o2 <- 0
+
+ for(k in 1:n) {
+  res_o2 <- res_o2 + sum(AW[((1:n)[(!(1:n) %in% k)]) + n * (k - 1), 
+                            seq(k, by = n, length.out = n)])
+ }
+ (res_o2 <- sar_simu_2$mean[3:4] * res_o2 / N)
+```
 
 
 
