@@ -11,7 +11,7 @@
 
 <meta name="author" content="T. Laurent, P. Margaretic, C. Thomas-Agnan" />
 
-<meta name="date" content="2019-04-19" />
+<meta name="date" content="2019-05-16" />
 
 <title>Spatial Flows Modelling with R</title>
 
@@ -235,7 +235,7 @@ $(document).ready(function () {
 
 <h1 class="title toc-ignore">Spatial Flows Modelling with <strong>R</strong></h1>
 <h4 class="author"><em>T. Laurent, P. Margaretic, C. Thomas-Agnan</em></h4>
-<h4 class="date"><em>April 19, 2019</em></h4>
+<h4 class="date"><em>May 16, 2019</em></h4>
 
 </div>
 
@@ -359,7 +359,7 @@ W_w &lt;-<span class="st"> </span><span class="kw">kronecker</span>(<span class=
 <p><span class="math inline">\(y_3 = (I_{N}-\rho_oW_o)^{-1}(Z\delta + \epsilon)\)</span>,</p>
 <p><span class="math inline">\(y_2 = (I_{N}-\rho_dW_d)^{-1}(Z\delta + \epsilon)\)</span>,</p>
 <p><span class="math inline">\(y_1 = (Z\delta + \epsilon)\)</span>,</p>
-<p>with <span class="math inline">\(Z=(1_{N}, X_o, X_d, g)\)</span> and <span class="math inline">\(\delta = (\alpha, \beta_o, \beta_d, \gamma)\)</span>. We generate a set of flows <span class="math inline">\(Y\)</span> with <span class="math inline">\(\alpha = 0\)</span>, <span class="math inline">\(\beta_d = (0.5, 1)\)</span>, <span class="math inline">\(\beta_o = (1.5, 2)\)</span>, <span class="math inline">\(\gamma = -0.5\)</span>, <span class="math inline">\(\rho_d = 0.4\)</span>, <span class="math inline">\(\rho_o = 0.4\)</span>, and <span class="math inline">\(\rho_w = 0.2\)</span>.</p>
+<p>with <span class="math inline">\(Z=(1_{N}, X_o, X_d, g)\)</span> and <span class="math inline">\(\delta = (\alpha, \beta_o, \beta_d, \gamma)\)</span>. We generate a set of flows <span class="math inline">\(Y\)</span> with <span class="math inline">\(\alpha = 0\)</span>, <span class="math inline">\(\beta_d = (0.5, 1)\)</span>, <span class="math inline">\(\beta_o = (1.5, 2)\)</span>, <span class="math inline">\(\gamma = -0.5\)</span>, <span class="math inline">\(\rho_d = 0.4\)</span>, <span class="math inline">\(\rho_o = 0.4\)</span>, and <span class="math inline">\(\rho_w = -0.4\)</span>.</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">N &lt;-<span class="st"> </span>n<span class="op">^</span><span class="dv">2</span>
 delta &lt;-<span class="st"> </span><span class="kw">c</span>(<span class="dv">0</span>, <span class="fl">0.5</span>, <span class="dv">1</span>, <span class="fl">1.5</span>, <span class="dv">2</span>, <span class="op">-</span><span class="fl">0.5</span>)
 id_x_d &lt;-<span class="st"> </span><span class="kw">substr</span>(<span class="kw">names</span>(flows_data), <span class="kw">nchar</span>(<span class="kw">names</span>(flows_data)) <span class="op">-</span><span class="st"> </span><span class="dv">1</span>, 
@@ -539,7 +539,6 @@ flows_lwd &lt;-<span class="st"> </span>((flows_data[, <span class="st">&quot;y_
 <pre><code>## Warning in st_centroid.sfc(x = sf::st_geometry(x), of_largest_polygon
 ## = max(sf::st_is(sf::st_as_sf(x), : st_centroid does not give correct
 ## centroids for longitude/latitude data</code></pre>
-<pre><code>## Linking to GEOS 3.5.1, GDAL 2.2.2, PROJ 4.9.2</code></pre>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">par</span>(<span class="dt">bg =</span> <span class="st">&quot;grey25&quot;</span>)
 <span class="co"># plot municipalities</span>
 <span class="kw">plot</span>(world, <span class="dt">border =</span> <span class="st">&quot;grey&quot;</span>, <span class="dt">lwd =</span> <span class="fl">0.5</span>)
@@ -581,6 +580,7 @@ flows_lwd &lt;-<span class="st"> </span>((flows_data[, <span class="st">&quot;y_
 <div id="lesage-and-pace-2008-estimation" class="section level2">
 <h2><span class="header-section-number">3.2</span> LeSage and Pace (2008) estimation</h2>
 <p>LeSage and Pace (2008) show that we can avoid to store the flows data by using the property of the Kroneker product in the space of the regions data. In their paper, they consider the case where <span class="math inline">\(x\)</span> is centered which permits some further simplifications in the resolution of the problem. We call this function <em>gravity_model()</em>. It takes as input arguments :</p>
+<div class="sourceCode"><pre class="sourceCode bash"><code class="sourceCode bash"><span class="ex">gravity_model</span>(x, Y, G, ind_d = NULL, ind_o = NULL) </code></pre></div>
 <ul>
 <li><strong>x</strong>, a <strong>data.frame</strong> or a matrix with explanatory variable observed on the <span class="math inline">\(n\)</span> geographical sites.</li>
 <li><strong>Y</strong>, the matrix of flows of size <span class="math inline">\(n \times n\)</span>,</li>
@@ -631,7 +631,8 @@ flows_lwd &lt;-<span class="st"> </span>((flows_data[, <span class="st">&quot;y_
 </div>
 <div id="with-the-real-data" class="section level3">
 <h3><span class="header-section-number">3.3.2</span> With the real data</h3>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">gravity_model</span>(<span class="dt">x =</span> <span class="kw">matrix</span>(wto_spatial<span class="op">@</span>data[, <span class="st">&quot;GDP&quot;</span>], <span class="dt">dimnames =</span> <span class="kw">list</span>(<span class="dv">1</span><span class="op">:</span><span class="dv">69</span>, <span class="st">&quot;GDP&quot;</span>)), <span class="dt">Y =</span> Y_wto, <span class="dt">G =</span> G_wto)</code></pre></div>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">gravity_model</span>(<span class="dt">x =</span> <span class="kw">matrix</span>(wto_spatial<span class="op">@</span>data[, <span class="st">&quot;GDP&quot;</span>], <span class="dt">dimnames =</span> <span class="kw">list</span>(<span class="dv">1</span><span class="op">:</span><span class="dv">69</span>, <span class="st">&quot;GDP&quot;</span>)), 
+              <span class="dt">Y =</span> Y_wto, <span class="dt">G =</span> G_wto)</code></pre></div>
 <pre><code>##                      [,1]
 ## (Intercept)  2.047246e+04
 ## GDP_d        4.412317e-03
@@ -696,6 +697,7 @@ flows_lwd &lt;-<span class="st"> </span>((flows_data[, <span class="st">&quot;y_
 <div id="spatial-autoregressive-interaction-models-when-n-n-times-n" class="section level2">
 <h2><span class="header-section-number">4.1</span> Spatial Autoregressive Interaction Models when <span class="math inline">\(N = n \times n\)</span></h2>
 <p>We use the Bayesian SAR method for estimating the parameters. Before estimating the parameters in the SAR flows model, we have to create intermediate functions :</p>
+<div class="sourceCode"><pre class="sourceCode bash"><code class="sourceCode bash"><span class="ex">ftrace1</span>(w, method = <span class="st">&quot;exact&quot;</span>, miter = 10, riter = 50)</code></pre></div>
 <ul>
 <li><em>ftrace1()</em>, which computes the trace of the spatial weight matrices <span class="math inline">\(W\)</span>, <span class="math inline">\(W^2\)</span>, <span class="math inline">\(W^3\)</span>, …, <span class="math inline">\(W^{miter}\)</span>,</li>
 <li><em>fodet1()</em>, which computes the jacobian matrix in the case of the model (9), i.e. the model with the 3 spatial weight matrices <span class="math inline">\(W_o\)</span>, <span class="math inline">\(W_d\)</span>, <span class="math inline">\(W_w\)</span></li>
@@ -705,7 +707,6 @@ flows_lwd &lt;-<span class="st"> </span>((flows_data[, <span class="st">&quot;y_
 <div id="traces-of-the-spatial-weight-matrix" class="section level3">
 <h3><span class="header-section-number">4.1.1</span> Traces of the spatial weight matrix</h3>
 <p>First we code the function <strong>ftrace1()</strong> which computes the traces of <span class="math inline">\(W\)</span>, <span class="math inline">\(W^2\)</span>, <span class="math inline">\(W^3\)</span>, …, <span class="math inline">\(W^{miter}\)</span>. The two possible methods are <strong>“exact”</strong> (based on the computation of <span class="math inline">\(W\)</span>, <span class="math inline">\(W^2\)</span>, <span class="math inline">\(W^3\)</span>, …, <span class="math inline">\(W^{miter}\)</span>) or <strong>“approx”</strong> (based on an MCMC approximation, Barry and Pace, 99). The argument <strong>miter</strong> corresponds to the desired maximum order trace and <strong>riter</strong> the maximum number of iterations used to estimate the trace.</p>
-<div class="sourceCode"><pre class="sourceCode bash"><code class="sourceCode bash"><span class="ex">ftrace1</span>(w, method = <span class="st">&quot;exact&quot;</span>, miter = 10, riter = 50)</code></pre></div>
 <p>Example: we compute the traces on the 10 first powers of the spatial weigh matrix. Here we do not use an approximation because the size of the matrix is small</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">(traces &lt;-<span class="st"> </span><span class="kw">ftrace1</span>(w))</code></pre></div>
 <pre><code>##  [1] 0.0000000 3.5000000 0.7500000 2.3750000 0.9375000 1.9062500 0.9843750
@@ -720,24 +721,24 @@ flows_lwd &lt;-<span class="st"> </span>((flows_data[, <span class="st">&quot;y_
 <div id="general-case-with-w_o-w_d-w_w" class="section level4">
 <h4><span class="header-section-number">4.1.2.1</span> General case with <span class="math inline">\(W_o\)</span>, <span class="math inline">\(W_d\)</span>, <span class="math inline">\(W_w\)</span></h4>
 <p>To compute the log determinant in the case of the full model (model 9), we code the function <strong>fodet1()</strong>. The input arguments are:</p>
+<div class="sourceCode"><pre class="sourceCode bash"><code class="sourceCode bash"><span class="ex">fodet1</span>(parms, traces, n)</code></pre></div>
 <ul>
 <li><strong>parms</strong>, a <strong>numeric</strong> vector containing <span class="math inline">\(\rho_1\)</span>, <span class="math inline">\(\rho_2\)</span>, <span class="math inline">\(\rho_3\)</span>,</li>
 <li><strong>traces</strong>, a <strong>numeric</strong> vector containing the estimated traces of <span class="math inline">\(W\)</span>, <span class="math inline">\(W^2\)</span>, …,<span class="math inline">\(W^{miter}\)</span>,</li>
 <li><strong>n</strong>, the sample size.</li>
 </ul>
-<div class="sourceCode"><pre class="sourceCode bash"><code class="sourceCode bash"><span class="ex">fodet1</span>(parms, traces, n)</code></pre></div>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">source</span>(<span class="st">&quot;./R/fodet1.R&quot;</span>)</code></pre></div>
 </div>
 <div id="case-with-only-one-spatial-weight-matrix-w_o-w_d-or-w_w" class="section level4">
 <h4><span class="header-section-number">4.1.2.2</span> Case with only one spatial weight matrix (<span class="math inline">\(W_o\)</span>, <span class="math inline">\(W_d\)</span> or <span class="math inline">\(W_w\)</span>)</h4>
 <p>In the particular case where there is a single spatial weight matrix (model 2 to 6 in Lesage and Pace, 2008), the algorithm is much simpler because the computation of <span class="math inline">\(Ln|I_N-\rho W_S|\)</span> where <span class="math inline">\(S=o,d,w,o+d,o+d+w\)</span> can be expressed directly as a function of the Jacobian of <span class="math inline">\(W\)</span>. First, the user has to compute the trace of the matrix <span class="math inline">\(W\)</span> by using the function <em>ftrace1()</em> and then compute the log determinant by using the function <em>lndetmc()</em>.</p>
 <p>The function takes as input arguments:</p>
+<div class="sourceCode"><pre class="sourceCode bash"><code class="sourceCode bash"><span class="ex">lndetmc</span>(parms, traces, n)</code></pre></div>
 <ul>
 <li><strong>parms</strong>, a scalar usually corresponding to the value of <span class="math inline">\(\rho\)</span>,</li>
 <li><strong>traces</strong> a vector of numeric corresponding to the eigen values of spatial weight matrix <span class="math inline">\(W\)</span>,</li>
 <li><strong>n</strong>, an integer, the size of the sample.</li>
 </ul>
-<div class="sourceCode"><pre class="sourceCode bash"><code class="sourceCode bash"><span class="ex">lndetmc</span>(parms, traces, n)</code></pre></div>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">source</span>(<span class="st">&quot;./R/lndetmc.R&quot;</span>)</code></pre></div>
 <p>In the case of a small matrix, we use the exact values of the traces of <span class="math inline">\(W\)</span>, <span class="math inline">\(W^2\)</span>, <span class="math inline">\(W^3\)</span>, …</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">lndetmc</span>(<span class="fl">0.25</span>, traces, n)</code></pre></div>
@@ -756,6 +757,7 @@ flows_lwd &lt;-<span class="st"> </span>((flows_data[, <span class="st">&quot;y_
 <div id="evaluation-of-the-log-likelihood-conditionnally-to-rho" class="section level3">
 <h3><span class="header-section-number">4.1.3</span> Evaluation of the log likelihood conditionnally to <span class="math inline">\(\rho\)</span></h3>
 <p>The function <em>c_sarf()</em> takes as arguments:</p>
+<div class="sourceCode"><pre class="sourceCode bash"><code class="sourceCode bash"><span class="ex">c_sarf</span>(rho, sige, Q, traces, n, nvars)</code></pre></div>
 <ul>
 <li><strong>rho</strong>, a vector containing the estimated values of <span class="math inline">\(\rho_d\)</span>, <span class="math inline">\(\rho_d\)</span>, <span class="math inline">\(\rho_w\)</span>,</li>
 <li><strong>sige</strong>, the value of <span class="math inline">\(\sigma^2\)</span></li>
@@ -763,12 +765,12 @@ flows_lwd &lt;-<span class="st"> </span>((flows_data[, <span class="st">&quot;y_
 <li><strong>traces</strong> a vector of numeric corresponding to the eigenvalues of the spatial weight matrix <span class="math inline">\(W\)</span>,</li>
 <li><strong>n</strong>, an integer, the sample size.</li>
 </ul>
-<div class="sourceCode"><pre class="sourceCode bash"><code class="sourceCode bash"><span class="ex">c_sarf</span>(rho, sige, Q, traces, n, nvars)</code></pre></div>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">source</span>(<span class="st">&quot;./R/c_sarf.R&quot;</span>)</code></pre></div>
 </div>
 <div id="function-sar_flow-model" class="section level3">
 <h3><span class="header-section-number">4.1.4</span> Function <em>sar_flow()</em> model</h3>
 <p>It takes as input arguments :</p>
+<div class="sourceCode"><pre class="sourceCode bash"><code class="sourceCode bash"><span class="ex">sar_flow</span>(x, Y, G, w, ind_d = NULL, ind_o = NULL, model = <span class="st">&quot;model_9&quot;</span>)</code></pre></div>
 <ul>
 <li><strong>x</strong>, a <strong>data.frame</strong> or a matrix with explanatory variables observed on the <span class="math inline">\(n\)</span> geographical sites.</li>
 <li><strong>Y</strong>, the matrix of flows of size <span class="math inline">\(n \times n\)</span>,</li>
@@ -777,42 +779,43 @@ flows_lwd &lt;-<span class="st"> </span>((flows_data[, <span class="st">&quot;y_
 <li><strong>ind_d</strong>, the indices of the variables in <strong>x</strong> which will be used at the destination,</li>
 <li><strong>ind_o</strong>, the indices of the variables in <strong>x</strong> of the variables used at the origin.</li>
 </ul>
-<div class="sourceCode"><pre class="sourceCode bash"><code class="sourceCode bash"><span class="ex">sar_flow</span>(x, Y, G, w, ind_d = NULL, ind_o = NULL, model = <span class="st">&quot;model_9&quot;</span>)</code></pre></div>
 </div>
 <div id="application-to-the-toy-data" class="section level3">
 <h3><span class="header-section-number">4.1.5</span> Application to the toy data</h3>
 <div id="model-2" class="section level4">
 <h4><span class="header-section-number">4.1.5.1</span> Model 2</h4>
-<p>We evaluate model 2 when <span class="math inline">\(Y\)</span> corresponds to the DGP used with model 2. We choose to include characteristics <span class="math inline">\(x_1\)</span> only at destination and <span class="math inline">\(x_2\)</span> only at origin.</p>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">system.time</span>(sar_simu_<span class="dv">2</span> &lt;-<span class="st"> </span><span class="kw">sar_flow</span>(<span class="dt">x =</span> x<span class="op">@</span>data, 
-                       <span class="dt">Y =</span> Y_<span class="dv">2</span>, 
-                       <span class="dt">G =</span> G, 
-                       <span class="dt">w =</span> w,
-                       <span class="dt">ind_d =</span> <span class="kw">c</span>(<span class="dv">1</span>, <span class="dv">2</span>),
-                       <span class="dt">ind_o =</span> <span class="kw">c</span>(<span class="dv">1</span>, <span class="dv">2</span>),
-                       <span class="dt">model =</span> <span class="st">&quot;model_2&quot;</span>) 
-)</code></pre></div>
-<pre><code>## ===========================================================================</code></pre>
-<pre><code>##    user  system elapsed 
-##   7.964   1.936   7.637</code></pre>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">sar_simu_<span class="dv">2</span></code></pre></div>
-<pre><code>##                   mean    lower_05   lower_95    t_stat
-## rho_d        0.3992659  0.32487805  0.4691650  8.907723
-## (intercept) 39.2656906 34.76685716 44.0094687 13.710997
-## x1_d         0.4805888  0.44696255  0.5158584 22.663798
-## x2_d         0.6876071  0.02068526  1.3726127  1.669396
-## x1_o         1.5026036  1.32504031  1.6902776 13.283114
-## x2_o         2.1790225  1.44603527  2.9037203  4.818383
-## g           -0.4807810 -0.58301389 -0.3830206 -7.958400</code></pre>
+<div id="bayesian-estimation" class="section level5">
+<h5><span class="header-section-number">4.1.5.1.1</span> Bayesian estimation</h5>
+<p>We evaluate model 2 when <span class="math inline">\(Y\)</span> corresponds to the DGP used with model 2. <!-- We choose to include characteristics $x_1$ only at destination and $x_2$ only at origin.  --></p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">system.time</span>(sar_simu_<span class="dv">2</span> &lt;-<span class="st"> </span><span class="kw">sar_flow_2</span>(<span class="dt">x =</span> flows_data[, <span class="kw">c</span>(<span class="st">&quot;x1_d&quot;</span>, <span class="st">&quot;x2_d&quot;</span>, <span class="st">&quot;x1_o&quot;</span>, <span class="st">&quot;x2_o&quot;</span>)], 
+                                     <span class="dt">y =</span> flows_data<span class="op">$</span>y_<span class="dv">2</span>, 
+                                     <span class="dt">g =</span> flows_data<span class="op">$</span>g, 
+                                     <span class="dt">W_d =</span> W_d,  
+                                     <span class="dt">model =</span> <span class="st">&quot;model_2&quot;</span>, <span class="dt">centered =</span> F) 
+)
+sar_simu_<span class="dv">2</span></code></pre></div>
+<pre><code>##                   mean     lower_05   lower_95     t_stat
+## rho_d        0.4025094  0.329046548  0.4703899  9.0659361
+## (intercept)  0.4109054 -0.636129746  1.4691345  0.6357636
+## x1_d         0.4789912  0.445431131  0.5130255 22.8295843
+## x2_d         0.6855693 -0.004052355  1.3867226  1.6219112
+## x1_o         1.4948648  1.325151332  1.6767557 13.3298544
+## x2_o         2.1548789  1.421824610  2.8995079  4.8162855
+## g           -0.4803826 -0.577553257 -0.3837271 -8.0188511</code></pre>
+</div>
+<div id="comparaison-with-the-log-likelihood-estimation" class="section level5">
+<h5><span class="header-section-number">4.1.5.1.2</span> Comparaison with the log-likelihood estimation</h5>
 <p>We compare the results with the <em>lagsarlm()</em> function and we remark that we obtain similar results :</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">result_lagsarlm&lt;-<span class="st"> </span><span class="kw">lagsarlm</span>(y_<span class="dv">2</span> <span class="op">~</span><span class="st"> </span>x1_d <span class="op">+</span><span class="st"> </span>x2_d <span class="op">+</span><span class="st"> </span>x1_o <span class="op">+</span><span class="st"> </span>x2_o <span class="op">+</span><span class="st"> </span>g, 
                            <span class="dt">data =</span> flows_data, 
-                           <span class="kw">mat2listw</span>(W_d))
-<span class="kw">summary</span>(result_lagsarlm, <span class="dt">correlation =</span> <span class="ot">TRUE</span>)</code></pre></div>
+                           <span class="kw">mat2listw</span>(W_d))</code></pre></div>
+<pre><code>## Warning: Function lagsarlm moved to the spatialreg package</code></pre>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">summary</span>(result_lagsarlm)</code></pre></div>
 <pre><code>## 
-## Call:
-## lagsarlm(formula = y_2 ~ x1_d + x2_d + x1_o + x2_o + g, data = flows_data, 
-##     listw = mat2listw(W_d))
+## Call:spatialreg::lagsarlm(formula = formula, data = data, listw = listw, 
+##     na.action = na.action, Durbin = Durbin, type = type, method = method, 
+##     quiet = quiet, zero.policy = zero.policy, interval = interval, 
+##     tol.solve = tol.solve, trs = trs, control = control)
 ## 
 ## Residuals:
 ##       Min        1Q    Median        3Q       Max 
@@ -839,39 +842,106 @@ flows_lwd &lt;-<span class="st"> </span>((flows_data[, <span class="st">&quot;y_
 ## Number of parameters estimated: 8 
 ## AIC: 183.53, (AIC for lm: 241.76)
 ## LM test for residual autocorrelation
-## test value: 0.19862, p-value: 0.65583
-## 
-##  Correlation of coefficients 
-##             sigma rho   (Intercept) x1_d  x2_d  x1_o  x2_o 
-## rho         -0.10                                          
-## (Intercept)  0.06 -0.60                                    
-## x1_d         0.08 -0.82  0.27                              
-## x2_d         0.00  0.03 -0.44        0.07                  
-## x1_o         0.10 -0.99  0.55        0.82 -0.03            
-## x2_o         0.04 -0.38 -0.17        0.31 -0.01  0.39      
-## g           -0.06  0.57 -0.41       -0.59  0.00 -0.59 -0.23</code></pre>
-<p>However, we remark that we canno’t use S2SLS method because of inversion problems.</p>
+## test value: 0.19862, p-value: 0.65583</code></pre>
+</div>
+<div id="comparaison-with-the-s2sls-estimation" class="section level5">
+<h5><span class="header-section-number">4.1.5.1.3</span> Comparaison with the S2SLS estimation</h5>
+<p>We remark that we canno’t use S2SLS method because of inversion problems.</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">result_s2sls&lt;-<span class="st"> </span><span class="kw">stsls</span>(y_<span class="dv">2</span> <span class="op">~</span><span class="st"> </span>x1_d <span class="op">+</span><span class="st"> </span>x2_d <span class="op">+</span><span class="st"> </span>x1_o <span class="op">+</span><span class="st"> </span>x2_o <span class="op">+</span><span class="st"> </span>g, 
                            <span class="dt">data =</span> flows_data, 
-                           <span class="kw">mat2listw</span>(W_d),
-                        <span class="dt">robust =</span> F,
-                        <span class="dt">legacy =</span> T,
-                        <span class="dt">HC =</span> <span class="st">&quot;HC1&quot;</span>)
-<span class="kw">summary</span>(result_lagsarlm, <span class="dt">correlation =</span> <span class="ot">TRUE</span>)</code></pre></div>
-<p>I started to code the S2SLS for a general spatial model flow (model 9). The codes are in the <em>s2sls()</em> function.</p>
+                           <span class="kw">mat2listw</span>(W_d))
+<span class="kw">summary</span>(result_lagsarlm)</code></pre></div>
+<p>We coded the S2SLS for a general spatial model flow (model 9). The codes are in the <em>s2sls_flow()</em> function which takes as input arguments :</p>
+<div class="sourceCode"><pre class="sourceCode bash"><code class="sourceCode bash"><span class="ex">s2sls_flow</span>(x_d, x_o, y, g, W_d = NULL, W_o = NULL, W_w = NULL)</code></pre></div>
+<ul>
+<li><strong>x_d</strong>, a <strong>data.frame</strong> or a matrix with the destination explanatory variables observed on the <span class="math inline">\(N\)</span> flows.</li>
+<li><strong>x_o</strong>, a <strong>data.frame</strong> or a matrix with the origin explanatory variables observed on the <span class="math inline">\(N\)</span> flows.</li>
+<li><strong>y</strong>, the vector of flows of size <span class="math inline">\(N\)</span>,</li>
+<li><strong>g</strong>, the vector of distances of size <span class="math inline">\(N\)</span>,</li>
+<li><strong>W_d</strong>, the spatial weight destination matrix of size <span class="math inline">\(N \times N\)</span>,</li>
+<li><strong>W_o</strong>, the spatial weight origin matrix of size <span class="math inline">\(N \times N\)</span>,</li>
+<li><strong>W_w</strong>, the spatial weight matrix of size <span class="math inline">\(N \times N\)</span>,</li>
+</ul>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">(sar_simu_2_sls &lt;-<span class="st"> </span><span class="kw">s2sls_flow</span>(<span class="dt">x_d =</span> flows_data[, <span class="kw">c</span>(<span class="st">&quot;x1_d&quot;</span>, <span class="st">&quot;x2_d&quot;</span>)],
+                              <span class="dt">x_o =</span> flows_data[, <span class="kw">c</span>(<span class="st">&quot;x1_o&quot;</span>, <span class="st">&quot;x2_o&quot;</span>)],
+                              <span class="dt">y =</span> flows_data<span class="op">$</span>y_<span class="dv">2</span>, 
+                              <span class="dt">g =</span> flows_data<span class="op">$</span>g, 
+                              <span class="dt">W_d =</span> W_d)) </code></pre></div>
+<pre><code>## $res_beta
+## (intercept)        x1_d        x2_d        x1_o        x2_o           g 
+##   0.2780029   0.4730613   0.6858400   1.4543598   2.0999750  -0.4665529 
+## 
+## $RHO
+##     rho_d 
+## 0.4186765 
+## 
+## $SIGMA
+## 1 x 1 Matrix of class &quot;dgeMatrix&quot;
+##           [,1]
+## [1,] 0.7361831
+## 
+## $sd_beta
+## (intercept)        x1_d        x2_d        x1_o        x2_o           g 
+##   0.4939577  24.9481068   1.9494302  13.8249410   5.4772519  -8.7964753 
+## 
+## $sd_rho
+##    rho_d 
+## 9.992658</code></pre>
+</div>
 </div>
 <div id="model-9" class="section level4">
 <h4><span class="header-section-number">4.1.5.2</span> Model 9</h4>
-<p>We evaluate model 9 when <span class="math inline">\(Y\)</span> corresponds to the DGP used with model 9. We choose to include characteristics <span class="math inline">\(x_1\)</span> only at destination and <span class="math inline">\(x_2\)</span> only at origin.</p>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">system.time</span>(sar_simu_<span class="dv">9</span> &lt;-<span class="st"> </span><span class="kw">sar_flow</span>(<span class="dt">x =</span> x<span class="op">@</span>data, 
-                       <span class="dt">Y =</span> Y_<span class="dv">9</span>, 
-                       <span class="dt">G =</span> G, 
-                       <span class="dt">w =</span> w,
-                       <span class="dt">ind_d =</span> <span class="dv">1</span>,
-                       <span class="dt">ind_o =</span> <span class="dv">2</span>,
-                       <span class="dt">model =</span> <span class="st">&quot;model_9&quot;</span>) 
+<div id="bayesian-estimation-1" class="section level5">
+<h5><span class="header-section-number">4.1.5.2.1</span> Bayesian estimation</h5>
+<p>We evaluate model 9 when <span class="math inline">\(Y\)</span> corresponds to the DGP used with model 9.</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">system.time</span>(sar_simu_<span class="dv">9</span> &lt;-<span class="st"> </span><span class="kw">sar_flow_2</span>(<span class="dt">x =</span> flows_data[, <span class="kw">c</span>(<span class="st">&quot;x1_d&quot;</span>, <span class="st">&quot;x2_d&quot;</span>, <span class="st">&quot;x1_o&quot;</span>, <span class="st">&quot;x2_o&quot;</span>)], 
+                                     <span class="dt">y =</span> flows_data<span class="op">$</span>y_<span class="dv">9</span>, 
+                                     <span class="dt">g =</span> flows_data<span class="op">$</span>g, 
+                                     <span class="dt">W_d =</span> W_d, <span class="dt">W_o =</span> W_o, <span class="dt">W_w =</span> W_w, 
+                                     <span class="dt">model =</span> <span class="st">&quot;model_9&quot;</span>, <span class="dt">centered =</span> F) 
 )
 sar_simu_<span class="dv">9</span></code></pre></div>
+<pre><code>##                   mean    lower_05   lower_95    t_stat
+## rho_d        0.2921077  0.09882351  0.4265540  3.065627
+## rho_o        0.1965056 -0.04258097  0.3279662  1.865223
+## rho_w       -0.3024148 -0.41518913 -0.0885566 -3.267648
+## (intercept)  0.3122792 -0.81640606  1.4694204  0.384893
+## x1_d         0.5538700  0.45566811  0.7042256  7.545440
+## x2_d         0.7980321  0.03607024  1.5457727  1.730757
+## x1_o         1.7571161  1.42197411  2.2286114  7.410303
+## x2_o         2.5564612  1.65805932  3.5181875  4.451152
+## g           -0.5476824 -0.70397782 -0.4100889 -6.016726</code></pre>
+</div>
+<div id="s2sls-estimation" class="section level5">
+<h5><span class="header-section-number">4.1.5.2.2</span> S2SLS estimation</h5>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">(sar_simu_9_sls &lt;-<span class="st"> </span><span class="kw">s2sls_flow</span>(<span class="dt">x_o =</span> flows_data[, <span class="kw">c</span>(<span class="st">&quot;x1_o&quot;</span>, <span class="st">&quot;x2_o&quot;</span>)],
+                             <span class="dt">x_d =</span> flows_data[, <span class="kw">c</span>(<span class="st">&quot;x1_d&quot;</span>, <span class="st">&quot;x2_d&quot;</span>)],
+                             <span class="dt">y =</span> flows_data<span class="op">$</span>y_<span class="dv">9</span>, 
+                             <span class="dt">g =</span> flows_data<span class="op">$</span>g, 
+                             <span class="dt">W_o =</span> W_o, 
+                             <span class="dt">W_d =</span> W_d,
+                             <span class="dt">W_w =</span> W_w)) </code></pre></div>
+<pre><code>## $res_beta
+## (intercept)        x1_d        x2_d        x1_o        x2_o           g 
+##  0.02521804  0.13576557  0.15603821  0.42122626  0.65132226 -0.16123914 
+## 
+## $RHO
+##      rho_d      rho_o      rho_w 
+##  0.8297333  0.8033208 -0.8259481 
+## 
+## $SIGMA
+## 1 x 1 Matrix of class &quot;dgeMatrix&quot;
+##          [,1]
+## [1,] 0.688522
+## 
+## $sd_beta
+## (intercept)        x1_d        x2_d        x1_o        x2_o           g 
+##  0.04721308  1.32741411  0.41678765  1.29281174  1.13038185 -1.55921112 
+## 
+## $sd_rho
+##     rho_d     rho_o     rho_w 
+##  6.328294  5.370484 -6.358214</code></pre>
+</div>
 </div>
 </div>
 <div id="application-to-the-real-data" class="section level3">
@@ -938,7 +1008,7 @@ AW &lt;-<span class="st"> </span><span class="kw">powerWeights</span>(W_hat, <sp
  }
 
  (res_o1 &lt;-<span class="st"> </span>sar_simu_<span class="dv">2</span><span class="op">$</span>mean[<span class="dv">5</span><span class="op">:</span><span class="dv">6</span>] <span class="op">*</span><span class="st"> </span>res_o1 <span class="op">/</span><span class="st"> </span>N)</code></pre></div>
-<pre><code>## [1] 2.188619 3.173858</code></pre>
+<pre><code>## [1] 2.189167 3.155730</code></pre>
 <p>We then compute the second part of the equation:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"> res_o2 &lt;-<span class="st"> </span><span class="dv">0</span>
 
@@ -947,7 +1017,7 @@ AW &lt;-<span class="st"> </span><span class="kw">powerWeights</span>(W_hat, <sp
                             <span class="kw">seq</span>(k, <span class="dt">by =</span> n, <span class="dt">length.out =</span> n)])
  }
  (res_o2 &lt;-<span class="st"> </span>sar_simu_<span class="dv">2</span><span class="op">$</span>mean[<span class="dv">3</span><span class="op">:</span><span class="dv">4</span>] <span class="op">*</span><span class="st"> </span>res_o2 <span class="op">/</span><span class="st"> </span>N)</code></pre></div>
-<pre><code>## [1] 0.03477231 0.04975082</code></pre>
+<pre><code>## [1] 0.03509866 0.05023593</code></pre>
 <p><strong>References</strong></p>
 <ul>
 <li><p>LeSage J.P. and Pace R.K. (2008). Spatial econometric modeling of origin-destination flows. Journal of Regional Science, 48(5), 941–-967.</p></li>

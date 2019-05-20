@@ -1,5 +1,5 @@
 sar_flow_2 <- function(x, y, g, W_d = NULL, W_o = NULL, W_w = NULL, 
-                       ind_d = NULL, ind_o = NULL, model = "") {
+                       ind_d = NULL, ind_o = NULL, model = "", centered = T) {
   
   # x, a data_frame or a matrix with explanatory variable of full size
   # Y, the vector of flows
@@ -15,8 +15,10 @@ sar_flow_2 <- function(x, y, g, W_d = NULL, W_o = NULL, W_w = NULL,
   x_matrix <- cbind(x_matrix, g)
   
   # centered data
-  x_matrix <- x_matrix - matrix(rep(apply(x_matrix, 2, mean), 
+  if (centered) {
+    x_matrix <- x_matrix - matrix(rep(apply(x_matrix, 2, mean), 
                                     each = n), n, ncol(x_matrix))  
+  }
   
   # we add the constant if not included
   if(! any(apply(x_matrix, 2, function(x) all(x == 1)))) {

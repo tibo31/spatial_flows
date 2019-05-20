@@ -1,7 +1,7 @@
 ---
 title: "Spatial Flows Modelling with **R**"
 author: "T. Laurent, P. Margaretic, C. Thomas-Agnan"
-date: "April 19, 2019"
+date: "May 20, 2019"
 output:
   html_document:
     highlight: tango
@@ -164,7 +164,7 @@ $y_2 = (I_{N}-\rho_dW_d)^{-1}(Z\delta + \epsilon)$,
 
 $y_1 = (Z\delta + \epsilon)$,
 
-with $Z=(1_{N}, X_o, X_d, g)$ and $\delta = (\alpha, \beta_o, \beta_d, \gamma)$. We generate a set of flows $Y$ with $\alpha = 0$, $\beta_d = (0.5, 1)$, $\beta_o = (1.5, 2)$, $\gamma = -0.5$, $\rho_d = 0.4$, $\rho_o = 0.4$, and $\rho_w = 0.2$.
+with $Z=(1_{N}, X_o, X_d, g)$ and $\delta = (\alpha, \beta_o, \beta_d, \gamma)$. We generate a set of flows $Y$ with $\alpha = 0$, $\beta_d = (0.5, 1)$, $\beta_o = (1.5, 2)$, $\gamma = -0.5$, $\rho_d = 0.4$, $\rho_o = 0.4$, and $\rho_w = -0.4$.
 
 ```{r}
 N <- n^2
@@ -448,6 +448,10 @@ The form of the gravity model is $Y = \alpha1_{N}+X_o\beta_o+X_d\beta_d+\gamma g
 
 LeSage and Pace (2008) show that we can avoid to store the flows data by using the property of the Kroneker product in the space of the regions data. In their paper, they consider the case where $x$ is centered which permits some further simplifications in the resolution of the problem. We call this function *gravity_model()*. It takes as input arguments : 
 
+```{bash, eval = F}
+gravity_model(x, Y, G, ind_d = NULL, ind_o = NULL) 
+```
+
 * **x**, a **data.frame** or a matrix with explanatory variable observed on the $n$ geographical sites.
 * **Y**, the matrix of flows of size $n \times n$,
 * **G**, the matrix of distance of size $n \times n$,
@@ -487,7 +491,8 @@ summary(gravity_flows)
 ### With the real data ### 
 
 ```{r}
-gravity_model(x = matrix(wto_spatial@data[, "GDP"], dimnames = list(1:69, "GDP")), Y = Y_wto, G = G_wto)
+gravity_model(x = matrix(wto_spatial@data[, "GDP"], dimnames = list(1:69, "GDP")), 
+              Y = Y_wto, G = G_wto)
 ```
 
 We compare the results with the ones obtained with the *lm()* function :
@@ -515,6 +520,10 @@ When the number of flows $N$ is equal to $n^2$, this implies some simplification
 
 We use the Bayesian SAR method for estimating the parameters. Before estimating the parameters in the SAR flows model, we have to create intermediate functions :
 
+```{bash, eval = F}
+ftrace1(w, method = "exact", miter = 10, riter = 50)
+```
+
 * *ftrace1()*, which computes the trace of the spatial weight matrices $W$, $W^2$, $W^3$, ..., $W^{miter}$,
 * *fodet1()*, which computes the jacobian matrix in the case of the model (9), i.e. the model with the 3 spatial weight matrices $W_o$, $W_d$, $W_w$
 * *lndetmc()*, which computes the jacobian matrix in the case of a model with only one spatial weight matrix,
@@ -523,11 +532,6 @@ We use the Bayesian SAR method for estimating the parameters. Before estimating 
 ### Traces of the spatial weight matrix ###
 
 First we code the function **ftrace1()** which computes the traces of $W$, $W^2$, $W^3$, ..., $W^{miter}$.  The two possible methods are **"exact"** (based on the computation of $W$, $W^2$, $W^3$, ..., $W^{miter}$) or **"approx"** (based on an MCMC approximation, Barry and Pace, 99). The argument **miter** corresponds to the desired maximum order trace and **riter** the maximum number of iterations used to estimate the trace.
-
-```{bash, eval = F}
-ftrace1(w, method = "exact", miter = 10, riter = 50)
-```
-
 
 ```{r, echo = F}
 source("./R/ftrace1.R")
@@ -552,13 +556,13 @@ By using the algorithm proposed by Barry and Pace (1999), the approximated trace
 
 To compute the log determinant in the case of the full model (model 9), we code the function **fodet1()**. The input arguments are: 
 
-* **parms**, a **numeric** vector containing $\rho_1$, $\rho_2$, $\rho_3$, 
-* **traces**, a **numeric** vector containing the estimated traces of $W$, $W^2$, ...,$W^{miter}$, 
-* **n**, the sample size. 
-
 ```{bash, eval = F}
 fodet1(parms, traces, n)
 ```
+
+* **parms**, a **numeric** vector containing $\rho_1$, $\rho_2$, $\rho_3$, 
+* **traces**, a **numeric** vector containing the estimated traces of $W$, $W^2$, ...,$W^{miter}$, 
+* **n**, the sample size. 
 
 ```{r, echo = T}
 source("./R/fodet1.R")
@@ -571,13 +575,14 @@ In the particular case where there is a single spatial weight matrix (model 2 to
 
 The function takes as input arguments: 
 
+```{bash, eval = F}
+lndetmc(parms, traces, n)
+```
+
 * **parms**, a scalar usually corresponding to the value of $\rho$,
 * **traces** a vector of numeric corresponding to the eigen values of spatial weight matrix $W$,
 * **n**, an integer, the size of the sample.
 
-```{bash, eval = F}
-lndetmc(parms, traces, n)
-```
 
 ```{r, echo = T}
 source("./R/lndetmc.R")
@@ -609,15 +614,16 @@ lndetmc(0.4, traces_approx, n) + lndetmc(0.2, traces_approx, n)
 
 The function *c_sarf()* takes as arguments:
 
+```{bash, eval = F}
+c_sarf(rho, sige, Q, traces, n, nvars)
+```
+
 * **rho**, a vector containing the estimated values of $\rho_d$, $\rho_d$, $\rho_w$, 
 * **sige**, the value of $\sigma^2$
 * **Q**, cross-product matrix of the various component residuals
 * **traces** a vector of numeric corresponding to the eigenvalues of the spatial weight matrix $W$,
 * **n**, an integer, the sample size.
 
-```{bash, eval = F}
-c_sarf(rho, sige, Q, traces, n, nvars)
-```
 
 
 ```{r, echo = T}
@@ -627,7 +633,12 @@ source("./R/c_sarf.R")
 
 ### Function *sar_flow()* model ###
 
+
 It takes as input arguments : 
+
+```{bash, eval = F}
+sar_flow(x, Y, G, w, ind_d = NULL, ind_o = NULL, model = "model_9")
+```
 
 * **x**, a **data.frame** or a matrix with explanatory variables observed on the $n$ geographical sites.
 * **Y**, the matrix of flows of size $n \times n$,
@@ -636,9 +647,6 @@ It takes as input arguments :
 * **ind_d**, the indices of the variables in **x** which will be used at the destination,
 * **ind_o**, the indices of the variables in **x** of the variables used at the origin.
 
-```{bash, eval = F}
-sar_flow(x, Y, G, w, ind_d = NULL, ind_o = NULL, model = "model_9")
-```
 
 ```{r, echo = F}
 source("./R/sar_flow.R")
@@ -649,9 +657,31 @@ source("./R/sar_flow.R")
 
 #### Model 2
 
-We evaluate model 2 when $Y$ corresponds to the DGP used with model 2. We choose to include characteristics $x_1$ only at destination and $x_2$ only at origin. 
+##### Bayesian estimation
 
-```{r}
+We evaluate model 2 when $Y$ corresponds to the DGP used with model 2. <!-- We choose to include characteristics $x_1$ only at destination and $x_2$ only at origin.  -->
+
+```{r, eval = F}
+system.time(sar_simu_2 <- sar_flow_2(x = flows_data[, c("x1_d", "x2_d", "x1_o", "x2_o")], 
+                                     y = flows_data$y_2, 
+                                     g = flows_data$g, 
+                                     W_d = W_d,  
+                                     model = "model_2", centered = F) 
+)
+sar_simu_2
+```
+```{r, echo= F, eval = F}
+save(sar_simu_2, file = "sar_simu_2.RData")
+```
+
+```{r, echo= F, eval = T}
+load("sar_simu_2.RData")
+sar_simu_2
+```
+
+
+
+```{r, echo = F, eval = F}
 system.time(sar_simu_2 <- sar_flow(x = x@data, 
                        Y = Y_2, 
                        G = G, 
@@ -664,6 +694,7 @@ sar_simu_2
 ```
 
 
+##### Comparaison with the log-likelihood estimation
 
 We compare the results with the *lagsarlm()* function and we remark that we obtain similar results :
 
@@ -671,41 +702,103 @@ We compare the results with the *lagsarlm()* function and we remark that we obta
 result_lagsarlm<- lagsarlm(y_2 ~ x1_d + x2_d + x1_o + x2_o + g, 
                            data = flows_data, 
                            mat2listw(W_d))
-summary(result_lagsarlm, correlation = TRUE)
+summary(result_lagsarlm)
 ```
 
-However, we remark that we canno't use S2SLS method because of inversion problems.
+##### Comparaison with the S2SLS estimation
+
+We remark that we canno't use S2SLS method because of inversion problems.
 
 ```{r, eval = F}
 result_s2sls<- stsls(y_2 ~ x1_d + x2_d + x1_o + x2_o + g, 
                            data = flows_data, 
-                           mat2listw(W_d),
-                        robust = F,
-                        legacy = T,
-                        HC = "HC1")
-summary(result_lagsarlm, correlation = TRUE)
+                           mat2listw(W_d))
+summary(result_lagsarlm)
+```
+
+We coded the S2SLS for a general spatial model flow (model 9). The codes are in the *s2sls_flow()* function which takes as input arguments : 
+
+```{bash, eval = F}
+s2sls_flow(x_d, x_o, y, g, W_d = NULL, W_o = NULL, W_w = NULL)
+```
+
+* **x_d**, a **data.frame** or a matrix with the destination explanatory variables observed on the $N$ flows.
+* **x_o**, a **data.frame** or a matrix with the origin explanatory variables observed on the $N$ flows.
+* **y**, the vector of flows of size $N$,
+* **g**, the vector of distances of size $N$,
+* **W_d**, the spatial weight destination matrix of size $N \times N$,
+* **W_o**, the spatial weight origin matrix of size $N \times N$,
+* **W_w**, the spatial weight matrix of size $N \times N$,
+
+
+```{r, echo = F}
+source("./R/s2sls_flow.R")
 ```
 
 
-I started to code the S2SLS for a general spatial model flow (model 9). The codes are in the *s2sls()* function.
+
+```{r}
+(sar_simu_2_sls <- s2sls_flow(x_d = flows_data[, c("x1_d", "x2_d")],
+                              x_o = flows_data[, c("x1_o", "x2_o")],
+                              y = flows_data$y_2, 
+                              g = flows_data$g, 
+                              W_d = W_d)) 
+
+```
 
 
 
 #### Model 9
 
-We evaluate model 9 when $Y$ corresponds to the DGP used with model 9. We choose to include characteristics $x_1$ only at  destination and $x_2$ only at origin. 
+##### Bayesian estimation 
+
+We evaluate model 9 when $Y$ corresponds to the DGP used with model 9. 
 
 ```{r, eval = F}
+system.time(sar_simu_9 <- sar_flow_2(x = flows_data[, c("x1_d", "x2_d", "x1_o", "x2_o")], 
+                                     y = flows_data$y_9, 
+                                     g = flows_data$g, 
+                                     W_d = W_d, W_o = W_o, W_w = W_w, 
+                                     model = "model_9", centered = F) 
+)
+sar_simu_9
+```
+
+```{r, echo = F, eval = F}
+save(sar_simu_9, file = "sar_simu_9.RData")
+```
+
+```{r, eval = F, echo = F}
 system.time(sar_simu_9 <- sar_flow(x = x@data, 
                        Y = Y_9, 
                        G = G, 
                        w = w,
-                       ind_d = 1,
-                       ind_o = 2,
+                       ind_d = c(1, 2),
+                       ind_o = c(1, 2),
                        model = "model_9") 
 )
 sar_simu_9
 ```
+
+
+```{r, echo = F}
+load("sar_simu_9.RData")
+sar_simu_9
+```
+
+##### S2SLS estimation
+
+```{r}
+(sar_simu_9_sls <- s2sls_flow(x_o = flows_data[, c("x1_o", "x2_o")],
+                             x_d = flows_data[, c("x1_d", "x2_d")],
+                             y = flows_data$y_9, 
+                             g = flows_data$g, 
+                             W_o = W_o, 
+                             W_d = W_d,
+                             W_w = W_w)) 
+
+```
+
 
 ### Application to the real data
 
