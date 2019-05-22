@@ -20,6 +20,13 @@ knitr::opts_chunk$set(echo = TRUE)
 
 Packages needed:
 
+```{r, eval = F}
+install.packages("devtools")
+devtools::install_github("https://github.com/gastonstat/arcdiagram")
+install.packages(c("cartography", "haven", "Matrix", "rgdal", 
+                   "spdep", "tidyverse", "maptools", "spatialreg"))
+```
+
 ```{r, message = F}
 require("arcdiagram") # representation of flows
 require("cartography")# representation of spatial data
@@ -698,7 +705,7 @@ sar_simu_2
 
 We compare the results with the *lagsarlm()* function and we remark that we obtain similar results :
 
-```{r}
+```{r, message = F}
 result_lagsarlm<- lagsarlm(y_2 ~ x1_d + x2_d + x1_o + x2_o + g, 
                            data = flows_data, 
                            mat2listw(W_d))
@@ -859,8 +866,7 @@ sar_mod_true_3
 
 
 
-## Interpreting the results ##
-
+# Interpreting the results #
 
 We compute the matrix $A(W) = (I_{N\times N} - \rho_oW_o -\rho_dW_d-\rho_wW_W)^{-1}$. We use the funtion *powerWeights()* which computes the power of matrix.
 
@@ -873,37 +879,108 @@ powerWeights(W, rho, order = 250, X,
 source("./R/powerWeights.R")
 ```
 
-#### Application on the Model 2 (simulated data)
+## Application on the Model 2 (simulated data)
   
+We separate origin and destination estimates :
+```{r}
+hat_beta_d <- sar_simu_2[c("x1_d", "x2_d"), "mean"]
+names(hat_beta_d) <- c("x1_d", "x2_d")
+hat_beta_o <- sar_simu_2[c("x1_o", "x2_o"), "mean"]
+names(hat_beta_o) <- c("x1_o", "x2_o")
+```
+
+We compute $A(W)$: 
+
 ```{r}
 W_hat <- sar_simu_2$mean[1] * W_d 
 AW <- powerWeights(W_hat, 1, order = 250, Diagonal(nrow(W_d)), 
                    tol = .Machine$double.eps^(3/5))
 ```
 
-
-Then, we compute the formula given in theorem 1. We first compute the left part of the equation:
+We may need to compute $A(W)\times W$ in the case of the SDM model: 
 
 ```{r}
- res_o1 <- 0
-
- for (k in 1:n) {
-  res_o1 <- res_o1 + sum(AW[((1:n)[(!(1:n) %in% k)]) + n * (k - 1), (1:n) + n * (k - 1)])
- }
-
- (res_o1 <- sar_simu_2$mean[5:6] * res_o1 / N)
+AW_W <- AW %*% W_hat
 ```
 
-We then compute the second part of the equation:
+We need to identify each origin and destination:
+```{r}
+all_dest <- flows_data[, "dest"] 
+all_origin <- flows_data[, "origin"]
+```
+
+We coded the function *OE_impact()*, *DE_impact()*, *NE_impact()* which take as argument : 
+
+* **AW**, the matrix $A(W)$,
+* **AW_W**, the matrix $A(W) \times W$ if the model is spatial Durbin,
+* **all_dest**, a vector which contains the id of the destination in $A(W)$, 
+* **all_origin**, a vector which contains the id of the origin in $A(W)$, 
+
+
+### Origin effect
 
 ```{r}
- res_o2 <- 0
+source("./R/OE_impact.R")
+```
 
- for(k in 1:n) {
-  res_o2 <- res_o2 + sum(AW[((1:n)[(!(1:n) %in% k)]) + n * (k - 1), 
-                            seq(k, by = n, length.out = n)])
- }
- (res_o2 <- sar_simu_2$mean[3:4] * res_o2 / N)
+To get the origin effect:
+```{r}
+origin_effect <- OE_impact(AW, AW_W = NULL, 
+                           all_dest, all_origin) 
+  
+OE <- (origin_effect[[1]] * hat_beta_o + origin_effect[[2]] * hat_beta_d) / n ^ 2 
+names(OE) <- c("x1", "x2")
+```
+
+### Destination effect
+
+```{r}
+source("./R/DE_impact.R")
+```
+
+To get the destination effect:
+```{r}
+destination_effect <- DE_impact(AW, AW_W = NULL, 
+                           all_dest, all_origin) 
+  
+DE <- (destination_effect[[1]] * hat_beta_o + destination_effect[[2]] * hat_beta_d) / n ^ 2 
+names(DE) <- c("x1", "x2")
+```
+
+### NE effect
+
+```{r}
+source("./R/NE_impact.R")
+```
+
+To get the NE effect:
+```{r}
+ne_effect <- NE_impact(AW, AW_W = NULL, 
+                           all_dest, all_origin) 
+  
+NE <- (ne_effect[[1]] * hat_beta_o + ne_effect[[2]] * hat_beta_d) / n ^ 2 
+names(NE) <- c("x1", "x2")
+```
+
+### intra effect
+
+```{r}
+source("./R/intra_impact.R")
+```
+
+To get the NE effect:
+```{r}
+intra_effect <- intra_impact(AW, AW_W = NULL, 
+                           all_dest, all_origin) 
+  
+intra <- (intra_effect[[1]] * hat_beta_o + intra_effect[[2]] * hat_beta_d) / n ^ 2 
+names(intra) <- c("x1", "x2")
+```
+
+### Summarise
+
+```{r}
+(impacts_mod2 <- cbind(OE, DE, NE, intra))
 ```
 
 
