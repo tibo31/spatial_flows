@@ -1,4 +1,5 @@
-sar_flow <- function(x, Y, G, w, ind_d = NULL, ind_o = NULL, model = "model_9") {
+sar_flow <- function(x, Y, G, w, ind_d = NULL, ind_o = NULL, model = "model_9",
+                     lagged = F) {
   
   # x, a data_frame or a matrix with explanatory variable
   # Y, the matrix of flows
@@ -10,13 +11,9 @@ sar_flow <- function(x, Y, G, w, ind_d = NULL, ind_o = NULL, model = "model_9") 
   n <- nrow(x)
   p <- ncol(x)
   iota_n <- rep(1, n)
-  # we center the data: 
-  x_matrix <- as(x, "matrix")
-  x_matrix_centered <- x_matrix - matrix(rep(apply(x_matrix, 2, mean), 
-                                             each = n), n, p)
+  
   # names of the variable 
   names_x <- colnames(x)
-  
   
   if (is.null(ind_d)) {
     ind_d <- 1:p
@@ -24,6 +21,7 @@ sar_flow <- function(x, Y, G, w, ind_d = NULL, ind_o = NULL, model = "model_9") 
   } else {
     names_x_d <- paste0(names_x[ind_d], "_d") 
   }
+  R_d <- length(names_x_d) # number of dest variable
   
   if (is.null(ind_o)) {
     ind_o <- 1:p
@@ -31,14 +29,40 @@ sar_flow <- function(x, Y, G, w, ind_d = NULL, ind_o = NULL, model = "model_9") 
   } else {
     names_x_o <- paste0(names_x[ind_o], "_o") 
   }
+  R_o <- length(names_x_o) # number of origin variable
+  
+  # we center the data: 
+  x_matrix <- as(x, "matrix")
+  x_matrix_centered <- x_matrix - matrix(rep(apply(x_matrix, 2, mean), 
+                                             each = n), n, p)
+
+  if (lagged) {
+    x_matrix_lagged <- w %*% x_matrix
+    x_matrix_centered_lagged <- x_matrix_lagged - matrix(rep(apply(x_matrix_lagged, 2, mean), 
+                                                             each = n), n, p)
+    x_matrix_centered_d <- cbind(x_matrix_centered[, ind_d],
+                                 x_matrix_centered_lagged[, ind_d])
+    x_matrix_centered_o <- cbind(x_matrix_centered[, ind_o],
+                                 x_matrix_centered_lagged[, ind_o])
+    # rename with the lagged variable
+    names_x_d <- c(names_x_d, paste0("lagged_", names_x_d))
+    names_x_o <- c(names_x_o, paste0("lagged_", names_x_o))    
+  } else {
+    x_matrix_centered_d <- x_matrix_centered[, ind_d]
+    x_matrix_centered_o <- x_matrix_centered[, ind_o]
+  }
+  
+  R_d_with_lagged <- length(names_x_d)
+  R_o_with_lagged <- length(names_x_o)
   
   # names of the result variable
   names_x_od <- c(names_x_d, names_x_o) 
   
-  R_d <- length(names_x_d)
-  R_o <- length(names_x_o)
-  nvars <- R_d + R_o + 2 # + 2 for intercept and distance
-  
+  if (!lagged) {
+    nvars <- R_d + R_o + 2 # + 2 for intercept and distance
+  } else {
+    nvars <- 2 * (R_d + R_o) + 2
+  }
   # we center the matrix of distance
   G_dot <- G - mean(G)
   
@@ -57,16 +81,16 @@ sar_flow <- function(x, Y, G, w, ind_d = NULL, ind_o = NULL, model = "model_9") 
   nb_rho <- length(names_rho)
   
   if (nb_rho == 0) {
-    return(gravity_model(x, Y, G))
+    return(gravity_model(x, Y, G, lagged = lagged, w = w))
   } 
   
   # initialization of rho
   pvec <- runif(nb_rho)
   rho <- 0.7 * pvec / sum(pvec) 
   
-  if (model == "model_8")
+  if (model == "model_8") {
     rho[3] <- - rho[1] * rho[2]
-  
+  }
   
   # initialization of bayesian parameters
   # number of replicates
@@ -104,11 +128,12 @@ sar_flow <- function(x, Y, G, w, ind_d = NULL, ind_o = NULL, model = "model_9") 
   zpzty1 <- zpzty2 <- zpzty3 <- zpzty4 <- numeric(nvars)
   
   for (i in 1:n) {
+    
     z <- cbind(iota_n, 
-               cbind(x_matrix_centered[, ind_d], 
-                     matrix(x_matrix_centered[i, ind_o], n, R_o, byrow = T),
+               cbind(x_matrix_centered_d, 
+                     matrix(x_matrix_centered_o[i, ], n, R_o_with_lagged, byrow = T),
                      G_dot[i, ])
-    )
+               )
     
     fy <- switch(substr(model, 7, 7),   # (8.15) in LeSage book                                
                  "9" = cbind(Y[, i], WY[, i], YW[, i], WYW[, i]),
@@ -164,7 +189,7 @@ sar_flow <- function(x, Y, G, w, ind_d = NULL, ind_o = NULL, model = "model_9") 
     
     
     # update for beta ends here
-    beta_draw <- bdraw %*% tau
+      beta_draw <- bdraw %*% tau
     
     # update for sige starts here
     for (ij in 1:(nb_rho + 1)) {
@@ -174,13 +199,13 @@ sar_flow <- function(x, Y, G, w, ind_d = NULL, ind_o = NULL, model = "model_9") 
                                "3" = bdraw3,
                                "4" = bdraw4)
       alpha <- beta_draw_temp[1]
-      bd <- beta_draw_temp[2:(2 + R_d - 1)]
-      bo <- beta_draw_temp[(2 + R_d):(2 + R_d + R_o - 1)]
+      bd <- beta_draw_temp[2:(2 + R_d_with_lagged - 1)]
+      bo <- beta_draw_temp[(2 + R_d_with_lagged):(2 + R_d_with_lagged + R_o_with_lagged - 1)]
       gamma_coeff <- beta_draw_temp[length(beta_draw_temp)]
       
-      xdb <- kronecker(iota_n, as(x_matrix_centered[, ind_d], "matrix") %*% bd) 
-      xob <- kronecker(as(x_matrix_centered[, ind_o], "matrix") %*% bo, iota_n)
-      
+      xdb <- kronecker(iota_n, as(x_matrix_centered_d, "matrix") %*% bd) 
+      xob <- kronecker(as(x_matrix_centered_o, "matrix") %*% bo, iota_n)
+     
       y_hat <- alpha + xob + xdb + as.vector(G_dot) * gamma_coeff
       
       if (ij == 1)
