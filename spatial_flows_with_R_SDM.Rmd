@@ -1,0 +1,343 @@
+---
+title: "Spatial Flows Modelling with **R**"
+author: "T. Laurent, P. Margaretic, C. Thomas-Agnan"
+date: "June 1, 2019"
+output:
+  html_document:
+    highlight: tango
+    number_sections: yes
+    toc: yes
+    toc_depth: 2
+  pdf_document:
+    toc: yes
+    toc_depth: '2'
+---
+<link href="markdown7.css" rel="stylesheet">
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Packages needed:
+
+```{r, eval = F}
+install.packages("devtools")
+devtools::install_github("https://github.com/gastonstat/arcdiagram")
+install.packages(c("cartography", "haven", "Matrix", "rgdal", 
+                   "spdep", "tidyverse", "maptools", "spatialreg"))
+```
+
+```{r, message = F}
+require("arcdiagram") # representation of flows
+require("cartography")# representation of spatial data
+require("haven")      # import stata files
+require("Matrix")     # sparse matrix
+require("rgdal")      # import spatial data
+require("spdep")      # spatial econometrics modelling
+require("tidyverse")  # tidyverse data
+require("maptools")   # spatial 
+```
+
+
+# How to present the data in practice #
+
+LeSage and Pace (2008, equation 20) present the spatial model specification for origin destination flows :
+
+$$y = \rho_dW_dy+\rho_oW_oy+\rho_wW_wy+\alpha\iota_N+X_d\beta_d+X_o\beta_o+\gamma g+\epsilon $$
+One example of application is the analysis of movement of populations from housing place to working place. In the litterature of spatial econometrics, the locations at the origins and the locations at destinations coincide.  In our paper, we propose to extend this model to the case where the locations at origin and destinations do not coincide. This can happen in geomarketting applications where the locations of the origins are the customers and the locations at destinations are the spatial coordinates of the shops. 
+
+## Data storage 
+
+We define by $n_o$ the number of geographical sites at the origin and by $n_d$ the number of geographical sites at destination. We note $Y_{ij}$ the flow which represents a quantity mooving from a geographical site $i$ ($i=i_1,...,i_{n_o}$) towards a geographical site $j$ ($j=j_1...j_{n_d}$). We note $N=n_on_d$. We also note $G_{ij}$ the distance between site $i$ and site $j$. Usually, the geographical sites coincide both at origin and destination which simplify the notation because in that case $i_1=j_1=1$, ..., $i_{n_o}=j_{n_d}=n$. In that particular case, we observe the same charactersitics $x$ both at origin and destination. When the origin and the destination are not the same, this complicates the notation because the variables observed at origin and destination are not the same. Thus, we should note $x$ the variables observed at the origin and $z$ the variables observed at destination. 
+
+### Dependent and distance variable
+
+To store the dependent variable and the distances, user has two options:
+
+* Flows and distances are represented into matrices of size $n_o \times n_d$,
+
+* Flows and distances are represented into vectors of size $N$.
+
+### Explanatory variables 
+
+To store the explanatory variables, user has also two options:
+
+* Explanatory variables $x$ observed at origin (respectively $z$ at destination) are kept into a data.frame of size $n_o\times R_o$ (resp. $n_d\times R_d$) where $R_o$ (resp. $R_d$) are the number of explanatory variables. 
+
+* Explanatory variables observed at origin and destination are kept into a data.frame of size $n_on_d\times (R_o + R_d)$. To obtain this form, user has to use a kronecker product applied on $x$ and $z$.  
+
+
+### Spatial weight matrices
+
+We note $w_o$ (resp. $w_d$) the spatial weight matrix of size $n_o\times n_o$ (resp. $n_d\times n_d$) which determine if two locations at origin (resp. destination) are neighbours.  
+
+To build spatial matrices $W_o$, $W_d$ or $W_w$ of size $N \times N$ user can use the properties of kronecker products by using the spatial weight matrix $w_o$ and $w_d$. He can also use the properties of sparce matrices.  
+
+
+### Example with simulated data
+
+We will consider two cases: the case where the origin and destination coincide and the case where it does not coincide. 
+
+#### Origin and destination coincide 
+
+We consider three examples with different sizes of observations. We used the examples chosen in https://ialab.it.monash.edu/~dwyer/papers/maptrix.pdf. We define the polygons by using the function *create_grid()* inspired by the example given by R. Bivand in https://stat.ethz.ch/pipermail/r-sig-geo/2009-December/007163.html. We observe one explanatory variable on each data set. The programs to obtain these simulated examples are in "simulated_examples.R.
+
+```{r}
+source("R/simulated_examples.R")
+```
+
+* The first example is a simplification of the 8 main regions in Australia.
+
+```{r, echo = F, fig = T}
+spplot(spdf_au, 
+      panel = function(x,y,z,subscripts,...) {
+        panel.polygonsplot(x,y,z,subscripts,...)
+        sp.text(coordinates(spdf_au), row.names(spdf_au), cex = 0.8)
+      } 
+)
+```
+
+* The second example is a simplification of the 16 main regions in Germany.
+
+```{r, echo = F, fig = T}
+spplot(spdf_ge, 
+      panel = function(x,y,z,subscripts,...) {
+        panel.polygonsplot(x,y,z,subscripts,...)
+        sp.text(coordinates(spdf_ge), row.names(spdf_ge), cex = 0.8)
+      } 
+)
+```
+
+* The third example is a simplification of the 51 main regions in US:
+
+```{r, echo = F, fig = T}
+spplot(spdf_usa, 
+      panel = function(x,y,z,subscripts,...) {
+        panel.polygonsplot(x,y,z,subscripts,...)
+        sp.text(coordinates(spdf_usa), row.names(spdf_usa), cex = 0.8)
+      } 
+)
+```
+
+##### Transform the explanatroy variables to flows 
+
+If user wants to store the explanatory variables in a matrix of size $N\times R$, he has to use the kronecker product. We present the results for the Australian regions. The same things have been done for Germany and USA: 
+
+```{r}
+n_au <- nrow(spdf_au)
+flows_au <- data.frame(origin = rep(row.names(spdf_au), 
+                                    each = n_au),
+                         dest = rep(row.names(spdf_au), n_au),
+                       x_o = kronecker(spdf_au$x, rep(1, n_au)),
+                       x_d = kronecker(rep(1, n_au), spdf_au$x))
+head(flows_au)
+```
+
+```{r, echo = F}
+n_ge <- nrow(spdf_ge)
+flows_ge <- data.frame(origin = rep(row.names(spdf_ge), 
+                                    each = n_ge),
+                         dest = rep(row.names(spdf_ge), n_ge),
+                       x_o = kronecker(spdf_ge$x, rep(1, n_ge)),
+                       x_d = kronecker(rep(1, n_ge), spdf_ge$x))
+
+n_usa <- nrow(spdf_usa)
+flows_usa <- data.frame(origin = rep(row.names(spdf_usa), 
+                                    each = n_usa),
+                         dest = rep(row.names(spdf_usa), n_usa),
+                       x_o = kronecker(spdf_usa$x, rep(1, n_usa)),
+                       x_d = kronecker(rep(1, n_usa), spdf_usa$x))
+```
+
+##### Distances betwwen locations
+
+The distances between flows can be presented in a matrix of size $n \times n$.
+
+```{r}
+G_au <- as.matrix(log(1 + dist(coordinates(spdf_au))))
+```
+
+It can be also added to the data.frame which presents the data by flow
+
+```{r}
+flows_au$g <- as.vector(G_au)
+```
+
+We have done the same things for Germany and USA.
+
+```{r, echo = F}
+G_ge <- as.matrix(log(dist(coordinates(spdf_ge))))
+flows_ge$g <- as.vector(G_ge)
+G_usa <- as.matrix(log(dist(coordinates(spdf_usa))))
+flows_usa$g <- as.vector(G_usa)
+```
+
+
+##### Construct the spatial weight matrices 
+
+To define the spatial weight matrics on the geographical sites, we use the contiguity properties for Australia and Germany. Because some states in USA have no neighbours by using this method, we use the 4 nearest neighbours for USA. All these methods have been implement in Bivand et al. (2013).
+
+```{r}
+w_au_nb <- poly2nb(spdf_au)
+w_au <- listw2mat(nb2listw(w_au_nb))
+w_ge_nb <- poly2nb(spdf_ge)
+w_ge <- listw2mat(nb2listw(w_ge_nb))
+w_usa_nb <- knn2nb(knearneigh(coordinates(spdf_usa), k = 4))
+w_usa <- listw2mat(nb2listw(w_usa_nb))
+```
+
+We represent the spatial links between the observations:
+
+```{r, fig = T, fig.width=10, fig.height=5}
+par(mfrow = c(1, 3))
+plot(spdf_au)
+plot(w_au_nb, coordinates(spdf_au), add = T)
+plot(spdf_ge)
+plot(w_ge_nb, coordinates(spdf_ge), add = T)
+plot(spdf_usa)
+plot(w_usa_nb, coordinates(spdf_usa), add = T)
+```
+
+To build the spatial weight matrices $W_o$, $W_d$ and $W_w$, user has to use the Kronecker products. It can be interesting to use the properties of sparse matrix to avoid to store too much data. Fo example we compare the memory needed to store $W_o$ with or without using the sparse properties:
+
+```{r}
+object.size(kronecker(diag(n_au), w_au))
+object.size(kronecker(Diagonal(n_au), w_au))
+```
+
+```{r}
+W_au_d <- kronecker(Diagonal(n_au), w_au)
+W_au_o <- kronecker(w_au, Diagonal(n_au))
+W_au_w <- kronecker(as(w_au, "Matrix"), w_au)
+```
+
+We have done the same things for Germany and USA.
+
+```{r, echo = F}
+W_ge_d <- kronecker(Diagonal(n_ge), w_ge)
+W_ge_o <- kronecker(w_ge, Diagonal(n_ge))
+W_ge_w <- kronecker(as(w_ge, "Matrix"), w_ge)
+
+W_usa_d <- kronecker(Diagonal(n_usa), w_usa)
+W_usa_o <- kronecker(w_usa, Diagonal(n_usa))
+W_usa_w <- kronecker(as(w_usa, "Matrix"), w_usa)
+```
+
+
+### DGP of the $Y$ variables ###
+
+We simulate 9 different SDM interaction models: 
+
+$y_9 = (I_{N}-\rho_oW_o-\rho_dW_d+\rho_wW_w)^{-1}(Z\delta + \epsilon)$,
+
+$y_8 = (I_{N}-\rho_oW_o-\rho_dW_d+\rho_d \rho_oW_w)^{-1}(Z\delta + \epsilon)$,
+
+$y_7 = (I_{N}-\rho_oW_o-\rho_dW_d)^{-1}(Z\delta + \epsilon)$,
+
+$y_6 = (I_{N}-\rho_{odw}(W_o + W_d + W_w)/3)^{-1}(Z\delta + \epsilon)$,
+
+$y_5 = (I_{N}-\rho_{od}(W_o + W_d)/2)^{-1}(Z\delta + \epsilon)$,
+
+$y_4 = (I_{N}-\rho_wW_w)^{-1}(Z\delta + \epsilon)$,
+
+$y_3 = (I_{N}-\rho_oW_o)^{-1}(Z\delta + \epsilon)$,
+
+$y_2 = (I_{N}-\rho_dW_d)^{-1}(Z\delta + \epsilon)$,
+
+$y_1 = (Z\delta + \epsilon)$,
+
+$y_o = (Z\delta_{gravity} + \epsilon)$,
+
+with $Z=(1_{N}, X_d, X_o, W_dX_d, W_oX_o, g)$, $\delta = (\alpha, \beta_d, \beta_o, \delta_d, \delta_o, \gamma)$ and $\delta_{gravity} = (\alpha, \beta_d, \beta_o, 0, 0, \gamma)$. We generate a set of flows $Y$ with $\alpha = 0$, $\beta_d = 1$, $\beta_o = 0.5$, $\delta_d = 0.5$, $\delta_o = 0.25$, $\gamma = -0.5$, $\rho_d = 0.4$, $\rho_o = 0.4$, and $\rho_w = -0.16$.
+
+
+```{r}
+delta <- c(0, 1, 0.5, 0.5, 0.25, -0.5)
+delta_gravity <- c(0, 1, 0.5, 0, 0, -0.5)
+rho <- c(0.4, 0.4, -0.16)
+```
+
+```{r}
+Z_au <- cbind(1, flows_au$x_d, flows_au$x_o, 
+              as.matrix(W_au_d) %*% flows_au$x_d, 
+              as.matrix(W_au_o) %*% flows_au$x_o, 
+              flows_au$g)
+```
+
+To simulate the data:
+```{r}
+set.seed(123)
+N_au <- n_au^2
+eps_au <- rnorm(N_au) 
+z_au_delta <- Z_au %*% delta 
+z_au_delta_gravity <- Z_au %*% delta_gravity 
+```
+
+Flows can be presented in vectorial format. For this, we use the function *DGP_flow_sdm()* : 
+
+```{r}
+source("./R/DGP_flow_sdm.R")
+```
+
+
+```{r}
+flows_au[, c("y_9", "y_8", "y_7", "y_6", "y_5", 
+             "y_4", "y_3", "y_2", "y_1", "y_0")] <- 
+  DGP_flow_sdm(z = Z_au, delta = delta, rho = rho, 
+               W_d = as.matrix(W_au_d), 
+               W_o = as.matrix(W_au_o), 
+               W_w = as.matrix(W_au_w), 
+               seed = 1234, sigma = 1, message = T)
+```
+
+The data set corresponding to the flows is presented in that form :
+
+```{r}
+head(flows_au)
+```
+Flows can be also be presented matricially. 
+
+```{r}
+Y_au_9 <- matrix(flows_au$y_9, n_au, n_au)
+Y_au_8 <- matrix(flows_au$y_8, n_au, n_au)
+Y_au_7 <- matrix(flows_au$y_7, n_au, n_au)
+Y_au_6 <- matrix(flows_au$y_6, n_au, n_au)
+Y_au_5 <- matrix(flows_au$y_5, n_au, n_au)
+Y_au_4 <- matrix(flows_au$y_4, n_au, n_au)
+Y_au_3 <- matrix(flows_au$y_3, n_au, n_au)
+Y_au_2 <- matrix(flows_au$y_2, n_au, n_au)
+Y_au_1 <- matrix(flows_au$y_1, n_au, n_au)
+Y_au_0 <- matrix(flows_au$y_0, n_au, n_au)
+```
+
+
+
+We have done the same things for Germany and USA.
+
+```{r}
+Z_ge <- cbind(1, flows_ge$x_d, flows_ge$x_o, 
+              as.matrix(W_ge_d) %*% flows_ge$x_d, 
+              as.matrix(W_ge_o) %*% flows_ge$x_o, 
+              flows_ge$g)
+flows_ge[, c("y_9", "y_8", "y_7", "y_6", "y_5", 
+             "y_4", "y_3", "y_2", "y_1", "y_0")] <- 
+  DGP_flow_sdm(z = Z_ge, delta = delta, rho = rho, 
+               W_d = as.matrix(W_ge_d), 
+               W_o = as.matrix(W_ge_o), 
+               W_w = as.matrix(W_ge_w), 
+               seed = 1234, sigma = 1, message = T)
+```
+
+```{r}
+Z_usa <- cbind(1, flows_usa$x_d, flows_usa$x_o, 
+              as.matrix(W_usa_d) %*% flows_usa$x_d, 
+              as.matrix(W_usa_o) %*% flows_usa$x_o, 
+              flows_usa$g)
+flows_usa[, c("y_9", "y_8", "y_7", "y_6", "y_5", 
+             "y_4", "y_3", "y_2", "y_1", "y_0")] <- 
+  DGP_flow_sdm(z = Z_usa, delta = delta, rho = rho, 
+               W_d = as.matrix(W_usa_d), 
+               W_o = as.matrix(W_usa_o), 
+               W_w = as.matrix(W_usa_w), 
+               seed = 1234, sigma = 1, message = T)
+```
