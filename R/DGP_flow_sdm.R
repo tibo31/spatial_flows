@@ -1,4 +1,4 @@
-DGP_flow_sdm <- function(z, delta, rho, W_o, W_d, W_w,
+DGP_flow_sdm <- function(z, delta, rho, W_d, W_o, W_w,
                          seed = NULL, sigma = 1, message = F) {
   
   # initialisation
@@ -12,8 +12,7 @@ DGP_flow_sdm <- function(z, delta, rho, W_o, W_d, W_w,
   z_delta_gravity <- z %*% delta_gravity 
   
   # Model 9 
-  irW_9 <- solve(diag(N) - rho[1] * W_d - 
-                      rho[2] * W_o - rho[3] * W_w)
+  irW_9 <- solve(diag(N) - (rho[1] * W_d + rho[2] * W_o + rho[3] * W_w))
   signal_9 <- irW_9 %*% z_delta
   bruit_9 <- irW_9 %*% eps
   y_9 <- signal_9 + bruit_9
@@ -61,7 +60,6 @@ DGP_flow_sdm <- function(z, delta, rho, W_o, W_d, W_w,
   signal_1 <- z_delta
   bruit_1 <- eps
   y_1 <- signal_1 + bruit_1
-  
   
   signal_0 <- z_delta_gravity
   bruit_0 <- eps

@@ -39,6 +39,14 @@ y_usa <- c(7, 7, rep(6, 3), rep(5, 9), rep(4, 11), rep(3, 10),
            rep(2, 8), rep(1, 5), rep(0, 3))
 sp_usa <- SpatialPointsDataFrame(cbind(x_usa, y_usa), usa_df)
 
+# grid
+x_grid <- rep(0:9, 10)
+y_grid <- rep(9:0, each = 10)
+id_region_grid <- paste0("R", 1:(10 * 10))
+grid_df <- data.frame(id = id_region_grid,
+                     x = round(sqrt(x_grid^2 + y_grid^2), 0), 
+                     row.names = "id")
+sp_grid <- SpatialPointsDataFrame(cbind(x_grid, y_grid), grid_df)
 
 create_grid <- function(sp_centroid) {
   # initialization
@@ -61,4 +69,9 @@ create_grid <- function(sp_centroid) {
 spdf_au <- create_grid(sp_centroid = sp_au)
 spdf_ge <- create_grid(sp_centroid = sp_ge)
 spdf_usa <- create_grid(sp_centroid = sp_usa)
+spdf_grid <- create_grid(sp_centroid = sp_grid)
 
+spdf_au$NOM <- row.names(spdf_au)
+spdf_ge$NOM <- row.names(spdf_ge)
+spdf_usa$NOM <- row.names(spdf_usa)
+spdf_grid$NOM <- row.names(spdf_grid)

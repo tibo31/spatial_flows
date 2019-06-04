@@ -1,7 +1,7 @@
 ---
 title: "Spatial Flows Modelling with **R**"
 author: "T. Laurent, P. Margaretic, C. Thomas-Agnan"
-date: "June 1, 2019"
+date: "June 4, 2019"
 output:
   html_document:
     highlight: tango
@@ -22,15 +22,12 @@ Packages needed:
 
 ```{r, eval = F}
 install.packages("devtools")
-devtools::install_github("https://github.com/gastonstat/arcdiagram")
-install.packages(c("cartography", "haven", "Matrix", "rgdal", 
+install.packages(c("cartography", "Matrix", "rgdal", 
                    "spdep", "tidyverse", "maptools", "spatialreg"))
 ```
 
 ```{r, message = F}
-require("arcdiagram") # representation of flows
 require("cartography")# representation of spatial data
-require("haven")      # import stata files
 require("Matrix")     # sparse matrix
 require("rgdal")      # import spatial data
 require("spdep")      # spatial econometrics modelling
@@ -89,7 +86,7 @@ source("R/simulated_examples.R")
 * The first example is a simplification of the 8 main regions in Australia.
 
 ```{r, echo = F, fig = T}
-spplot(spdf_au, 
+spplot(spdf_au, "x",
       panel = function(x,y,z,subscripts,...) {
         panel.polygonsplot(x,y,z,subscripts,...)
         sp.text(coordinates(spdf_au), row.names(spdf_au), cex = 0.8)
@@ -100,7 +97,7 @@ spplot(spdf_au,
 * The second example is a simplification of the 16 main regions in Germany.
 
 ```{r, echo = F, fig = T}
-spplot(spdf_ge, 
+spplot(spdf_ge, "x",
       panel = function(x,y,z,subscripts,...) {
         panel.polygonsplot(x,y,z,subscripts,...)
         sp.text(coordinates(spdf_ge), row.names(spdf_ge), cex = 0.8)
@@ -111,7 +108,7 @@ spplot(spdf_ge,
 * The third example is a simplification of the 51 main regions in US:
 
 ```{r, echo = F, fig = T}
-spplot(spdf_usa, 
+spplot(spdf_usa, "x",
       panel = function(x,y,z,subscripts,...) {
         panel.polygonsplot(x,y,z,subscripts,...)
         sp.text(coordinates(spdf_usa), row.names(spdf_usa), cex = 0.8)
@@ -119,7 +116,14 @@ spplot(spdf_usa,
 )
 ```
 
-##### Transform the explanatroy variables to flows 
+<!-- * The fourth example is a grid of size $40 \times 25$ i.e. with 1000 regions -->
+
+```{r, echo = F, eval = F, fig = T}
+spplot(spdf_grid, "x")
+```
+
+
+##### Transform the explanatory variables to flows 
 
 If user wants to store the explanatory variables in a matrix of size $N\times R$, he has to use the kronecker product. We present the results for the Australian regions. The same things have been done for Germany and USA: 
 
@@ -149,7 +153,16 @@ flows_usa <- data.frame(origin = rep(row.names(spdf_usa),
                        x_d = kronecker(rep(1, n_usa), spdf_usa$x))
 ```
 
-##### Distances betwwen locations
+```{r, echo = F, eval = F}
+n_grid <- nrow(spdf_grid)
+flows_grid <- data.frame(origin = rep(row.names(spdf_grid), 
+                                    each = n_grid),
+                         dest = rep(row.names(spdf_grid), n_grid),
+                       x_o = kronecker(spdf_grid$x, rep(1, n_grid)),
+                       x_d = kronecker(rep(1, n_grid), spdf_grid$x))
+```
+
+##### Distances between locations
 
 The distances between flows can be presented in a matrix of size $n \times n$.
 
@@ -163,15 +176,19 @@ It can be also added to the data.frame which presents the data by flow
 flows_au$g <- as.vector(G_au)
 ```
 
-We have done the same things for Germany and USA.
+We have done the same things for Germany, USA and the simulated grid.
 
 ```{r, echo = F}
-G_ge <- as.matrix(log(dist(coordinates(spdf_ge))))
+G_ge <- as.matrix(log(1 + dist(coordinates(spdf_ge))))
 flows_ge$g <- as.vector(G_ge)
-G_usa <- as.matrix(log(dist(coordinates(spdf_usa))))
+G_usa <- as.matrix(log(1 + dist(coordinates(spdf_usa))))
 flows_usa$g <- as.vector(G_usa)
 ```
 
+```{r, echo = F, eval =F}
+G_grid <- as.matrix(log(1 + dist(coordinates(spdf_grid))))
+flows_grid$g <- as.vector(G_grid)
+```
 
 ##### Construct the spatial weight matrices 
 
@@ -186,9 +203,14 @@ w_usa_nb <- knn2nb(knearneigh(coordinates(spdf_usa), k = 4))
 w_usa <- listw2mat(nb2listw(w_usa_nb))
 ```
 
+```{r, echo = F, eval = F}
+w_grid_nb <- knn2nb(knearneigh(coordinates(spdf_grid), k = 4))
+w_grid <- listw2mat(nb2listw(w_grid_nb))
+```
+
 We represent the spatial links between the observations:
 
-```{r, fig = T, fig.width=10, fig.height=5}
+```{r, fig = T, fig.width=10, fig.height=6}
 par(mfrow = c(1, 3))
 plot(spdf_au)
 plot(w_au_nb, coordinates(spdf_au), add = T)
@@ -211,18 +233,35 @@ W_au_o <- kronecker(w_au, Diagonal(n_au))
 W_au_w <- kronecker(as(w_au, "Matrix"), w_au)
 ```
 
+We prepare the lagged explanatory variables:
+
+```{r}
+flows_au$W_dx_d <- as.matrix(W_au_d) %*% flows_au$x_d
+flows_au$W_ox_o <- as.matrix(W_au_o) %*% flows_au$x_o
+```
+
+
 We have done the same things for Germany and USA.
 
 ```{r, echo = F}
 W_ge_d <- kronecker(Diagonal(n_ge), w_ge)
 W_ge_o <- kronecker(w_ge, Diagonal(n_ge))
 W_ge_w <- kronecker(as(w_ge, "Matrix"), w_ge)
+flows_ge$W_dx_d <- as.matrix(W_ge_d) %*% flows_ge$x_d
+flows_ge$W_ox_o <- as.matrix(W_ge_o) %*% flows_ge$x_o
 
 W_usa_d <- kronecker(Diagonal(n_usa), w_usa)
 W_usa_o <- kronecker(w_usa, Diagonal(n_usa))
 W_usa_w <- kronecker(as(w_usa, "Matrix"), w_usa)
+flows_usa$W_dx_d <- as.matrix(W_usa_d) %*% flows_usa$x_d
+flows_usa$W_ox_o <- as.matrix(W_usa_o) %*% flows_usa$x_o
 ```
 
+```{r, echo = F, eval = F}
+W_grid_d <- kronecker(Diagonal(n_grid), w_grid)
+W_grid_o <- kronecker(w_grid, Diagonal(n_grid))
+W_grid_w <- kronecker(as(w_grid, "Matrix"), w_grid)
+```
 
 ### DGP of the $Y$ variables ###
 
@@ -248,12 +287,11 @@ $y_1 = (Z\delta + \epsilon)$,
 
 $y_o = (Z\delta_{gravity} + \epsilon)$,
 
-with $Z=(1_{N}, X_d, X_o, W_dX_d, W_oX_o, g)$, $\delta = (\alpha, \beta_d, \beta_o, \delta_d, \delta_o, \gamma)$ and $\delta_{gravity} = (\alpha, \beta_d, \beta_o, 0, 0, \gamma)$. We generate a set of flows $Y$ with $\alpha = 0$, $\beta_d = 1$, $\beta_o = 0.5$, $\delta_d = 0.5$, $\delta_o = 0.25$, $\gamma = -0.5$, $\rho_d = 0.4$, $\rho_o = 0.4$, and $\rho_w = -0.16$.
+with $Z=(1_{N}, X_d, X_o, W_dX_d, W_oX_o, g)$, $\delta = (\alpha, \beta_d, \beta_o, \delta_d, \delta_o, \gamma)$ and $\delta_{gravity} = (\alpha, \beta_d, \beta_o, 0, 0, \gamma)$. We generate a set of flows $Y$ with $\alpha = 0$, $\beta_d = 1$, $\beta_o = 0.5$, $\delta_d = 0.5$, $\delta_o = 0.25$, $\gamma = -2.0$, $\rho_d = 0.4$, $\rho_o = 0.4$, and $\rho_w = -0.16$.
 
 
 ```{r}
-delta <- c(0, 1, 0.5, 0.5, 0.25, -0.5)
-delta_gravity <- c(0, 1, 0.5, 0, 0, -0.5)
+delta <- c(0, 1, 0.5, 0.5, 0.25, -2)
 rho <- c(0.4, 0.4, -0.16)
 ```
 
@@ -264,21 +302,30 @@ Z_au <- cbind(1, flows_au$x_d, flows_au$x_o,
               flows_au$g)
 ```
 
-To simulate the data:
-```{r}
-set.seed(123)
-N_au <- n_au^2
-eps_au <- rnorm(N_au) 
-z_au_delta <- Z_au %*% delta 
-z_au_delta_gravity <- Z_au %*% delta_gravity 
-```
-
-Flows can be presented in vectorial format. For this, we use the function *DGP_flow_sdm()* : 
+Flows can be presented in vectorial format. For this, we use the function *DGP_flow_sdm()* which permits to simulate flows data.
 
 ```{r}
 source("./R/DGP_flow_sdm.R")
 ```
 
+```{r, echo = F}
+source("./R/powerWeights.R")
+```
+
+
+The function *DGP_flow_sdm()* takes as arguments:
+```{bash, eval = F}
+DGP_flow_sdm(z, delta, rho, W_d, W_o, W_w,
+             seed = NULL, sigma = 1, message = F)
+```
+
+* **z**, the matrix containing the variables,
+* **delta**, the vector of parameters,
+* **rho**, the vector with $(\rho_d,\rho_o,\rho_w)$
+* **W_o**, **W_d**, **W_w** the spatial weight matrices of size $N\times N$
+* **seed**, an integer value for the seed 
+* **sigma**, the variance of the residuals
+* **message**, print a message to indicate the ration of signal/noise. 
 
 ```{r}
 flows_au[, c("y_9", "y_8", "y_7", "y_6", "y_5", 
@@ -287,7 +334,7 @@ flows_au[, c("y_9", "y_8", "y_7", "y_6", "y_5",
                W_d = as.matrix(W_au_d), 
                W_o = as.matrix(W_au_o), 
                W_w = as.matrix(W_au_w), 
-               seed = 1234, sigma = 1, message = T)
+               seed = 123, sigma = 1, message = T)
 ```
 
 The data set corresponding to the flows is presented in that form :
@@ -311,7 +358,6 @@ Y_au_0 <- matrix(flows_au$y_0, n_au, n_au)
 ```
 
 
-
 We have done the same things for Germany and USA.
 
 ```{r}
@@ -328,6 +374,19 @@ flows_ge[, c("y_9", "y_8", "y_7", "y_6", "y_5",
                seed = 1234, sigma = 1, message = T)
 ```
 
+```{r, echo = F}
+Y_ge_9 <- matrix(flows_ge$y_9, n_ge, n_ge)
+Y_ge_8 <- matrix(flows_ge$y_8, n_ge, n_ge)
+Y_ge_7 <- matrix(flows_ge$y_7, n_ge, n_ge)
+Y_ge_6 <- matrix(flows_ge$y_6, n_ge, n_ge)
+Y_ge_5 <- matrix(flows_ge$y_5, n_ge, n_ge)
+Y_ge_4 <- matrix(flows_ge$y_4, n_ge, n_ge)
+Y_ge_3 <- matrix(flows_ge$y_3, n_ge, n_ge)
+Y_ge_2 <- matrix(flows_ge$y_2, n_ge, n_ge)
+Y_ge_1 <- matrix(flows_ge$y_1, n_ge, n_ge)
+Y_ge_0 <- matrix(flows_ge$y_0, n_ge, n_ge)
+```
+
 ```{r}
 Z_usa <- cbind(1, flows_usa$x_d, flows_usa$x_o, 
               as.matrix(W_usa_d) %*% flows_usa$x_d, 
@@ -341,3 +400,741 @@ flows_usa[, c("y_9", "y_8", "y_7", "y_6", "y_5",
                W_w = as.matrix(W_usa_w), 
                seed = 1234, sigma = 1, message = T)
 ```
+
+```{r, echo = F}
+Y_usa_9 <- matrix(flows_usa$y_9, n_usa, n_usa)
+Y_usa_8 <- matrix(flows_usa$y_8, n_usa, n_usa)
+Y_usa_7 <- matrix(flows_usa$y_7, n_usa, n_usa)
+Y_usa_6 <- matrix(flows_usa$y_6, n_usa, n_usa)
+Y_usa_5 <- matrix(flows_usa$y_5, n_usa, n_usa)
+Y_usa_4 <- matrix(flows_usa$y_4, n_usa, n_usa)
+Y_usa_3 <- matrix(flows_usa$y_3, n_usa, n_usa)
+Y_usa_2 <- matrix(flows_usa$y_2, n_usa, n_usa)
+Y_usa_1 <- matrix(flows_usa$y_1, n_usa, n_usa)
+Y_usa_0 <- matrix(flows_usa$y_0, n_usa, n_usa)
+```
+
+
+```{r, echo = F, eval = F}
+Z_grid <- cbind(1, flows_grid$x_d, flows_grid$x_o, 
+              as.numeric(W_grid_d %*% as(flows_grid$x_d, "sparseVector")), 
+              as.numeric(W_grid_o %*% as(flows_grid$x_o, "sparseVector")), 
+              flows_grid$g)
+flows_grid[, c("y_9", "y_8", "y_7", "y_6", "y_5", 
+             "y_4", "y_3", "y_2", "y_1", "y_0")] <- 
+  DGP_flow_sdm(z = Z_grid, delta = delta, rho = rho, 
+               W_d = W_grid_d, 
+               W_o = W_grid_o, 
+               W_w = W_grid_w, 
+               seed = 1234, sigma = 1, message = T,
+               method = "power")
+```
+
+```{r, echo = F, eval = F}
+Y_grid_9 <- matrix(flows_grid$y_9, n_grid, n_grid)
+Y_grid_8 <- matrix(flows_grid$y_8, n_grid, n_grid)
+Y_grid_7 <- matrix(flows_grid$y_7, n_grid, n_grid)
+Y_grid_6 <- matrix(flows_grid$y_6, n_grid, n_grid)
+Y_grid_5 <- matrix(flows_grid$y_5, n_grid, n_grid)
+Y_grid_4 <- matrix(flows_grid$y_4, n_grid, n_grid)
+Y_grid_3 <- matrix(flows_grid$y_3, n_grid, n_grid)
+Y_grid_2 <- matrix(flows_grid$y_2, n_grid, n_grid)
+Y_grid_1 <- matrix(flows_grid$y_1, n_grid, n_grid)
+Y_grid_0 <- matrix(flows_grid$y_0, n_grid, n_grid)
+```
+
+# Data Vizualization #
+
+We use here the package **cartography** (Giraud and Lambert, 2016) for representing the flows.
+
+```{r}
+mtq_mob <- getLinkLayer(
+  x = spdf_au, 
+  xid = "NOM", 
+  df = flows_au, 
+  dfid = c("origin","dest")
+)
+```
+
+We discretize the variable $y_9$:
+```{r}
+breaks <- quantile(flows_au$y_9)
+flows_au$y_9_discret <- cut(flows_au$y_9, breaks,
+                            include.lowest = T)
+```
+
+We plot all the flows.
+
+```{r}
+par(bg = "grey25", oma = c(0, 0, 0, 0),
+    mar = c(0, 0, 0, 0), mai = c(0, 0, 0, 0))
+# plot municipalities
+plot(spdf_au, col = "grey13", border = "grey25", 
+     bg = "grey25", lwd = 0.5)
+# plot graduated links
+gradLinkTypoLayer(
+  x = mtq_mob, 
+  xid = c("origin","dest"),
+  df = flows_au, 
+  dfid = c("origin","dest"),
+  var = "y_9", 
+  breaks = breaks,
+  lwd = c(1, 4, 8, 16),
+  var2 = "y_9_discret", 
+  legend.var.pos = "left",
+  legend.var.title.txt = "Nb. of\nTrade",
+) 
+
+# map layout
+layoutLayer(title = "Trades", 
+            sources = "Simulated data",  
+            author = paste0("cartography ", packageVersion("cartography")), 
+            frame = FALSE, col = "grey25", coltitle = "white",
+            tabtitle = TRUE)
+```
+
+
+# Non spatial modelling #
+
+## Gravity model ##
+
+The form of the gravity model is $Y = \alpha1_{N}+X_o\beta_o+X_d\beta_d+\gamma g + \epsilon$. To fit this model with **R**, we propose two options:
+
+* We implement the formulas proposed by LeSage and Pace (2008) which avoid to store the full vectors for the explanatory variables by using the kronecker properties.
+
+* Use the function *lm()* applied to the vectorized form of the data set. 
+
+
+## LeSage and Pace (2008) estimation ##
+
+LeSage and Pace (2008) show that we can avoid to store the flows data by using the property of the Kroneker product in the space of the regions data. In their paper, they consider the case where $x$ is centered which permits some further simplifications in the resolution of the problem. We call this function *gravity_model()*. It takes as input arguments : 
+
+```{bash, eval = F}
+gravity_model(x, Y, G, ind_d = NULL, ind_o = NULL) 
+```
+
+* **x**, a **data.frame** or a matrix with explanatory variable observed on the $n$ geographical sites.
+* **Y**, the matrix of flows of size $n \times n$,
+* **G**, the matrix of distance of size $n \times n$,
+* **ind_d**, the indices of the variables in **x** which will be used at the destination,
+* **ind_o**, the indices of the variables in **x** of the variables used at the origin.
+
+
+```{r, echo = T}
+source("./R/gravity_model.R")
+```
+
+## Applications ##
+
+### With the toy data ###
+
+```{r}
+gravity_model(x = as.matrix(spdf_au@data$x), Y = Y_au_0, G = G_au)
+```
+
+We compare the results with the ones obtained with the function *lm()* :
+
+```{r}
+gravity_flows <- lm(y_0 ~ x_d + x_o + g, data = flows_au)
+```
+
+The function *summary()* gives also the standard errors of the estimated coefficients and the results of the t-test. It also gives the values of the $R^2$. 
+
+```{r}
+summary(gravity_flows)
+```
+
+**Remark 1:** Unsurprisingly, we find the same values of the estimates for $\beta_o$, $\beta_d$ and $\gamma$ than those obtained with the function *gravity_model()*. The estimate of the intercept is different because the data have been centered. 
+
+**Remark 2:** to compute the estimates with the *lm()* function, the user needs to work with the full matrix of size $N \times 2p$ where $p$ is the number of explanatory variable. 
+
+
+# Spatial Modelling # 
+
+When the number of flows $N$ is equal to $n^2$, this implies some simplifications in the computations. However, this is not always the case in practice. That is why we consider the two options :
+
+* $N = n^2$
+* $N < n^2$ 
+
+## Spatial Autoregressive Interaction Models when $N = n \times n$ ##
+
+We use the Bayesian SAR method for estimating the parameters. Before estimating the parameters in the SAR flows model, we have to create intermediate functions :
+
+```{bash, eval = F}
+ftrace1(w, method = "exact", miter = 10, riter = 50)
+```
+
+* *ftrace1()*, which computes the trace of the spatial weight matrices $W$, $W^2$, $W^3$, ..., $W^{miter}$,
+* *fodet1()*, which computes the jacobian matrix in the case of the model (9), i.e. the model with the 3 spatial weight matrices $W_o$, $W_d$, $W_w$
+* *lndetmc()*, which computes the jacobian matrix in the case of a model with only one spatial weight matrix,
+* *c_sarf()*, which computes the log likelihood conditionnally to $\rho$.
+
+### Traces of the spatial weight matrix ###
+
+First we code the function **ftrace1()** which computes the traces of $W$, $W^2$, $W^3$, ..., $W^{miter}$.  The two possible methods are **"exact"** (based on the computation of $W$, $W^2$, $W^3$, ..., $W^{miter}$) or **"approx"** (based on an MCMC approximation, Barry and Pace, 99). The argument **miter** corresponds to the desired maximum order trace and **riter** the maximum number of iterations used to estimate the trace.
+
+```{r, echo = F}
+source("./R/ftrace1.R")
+```
+
+Example: we compute the traces on the 10 first powers of the spatial weigh matrix. Here we do not use an approximation because the size of the matrix is small
+
+```{r}
+(traces <- ftrace1(w_au))
+```
+
+By using the algorithm proposed by Barry and Pace (1999), the approximated traces are equal to:
+
+```{r}
+(traces_approx <- ftrace1(w_au, method = "approx", miter = 10, riter = 50000))
+```
+
+
+### Computation of the determinant ###
+
+#### General case with $W_o$, $W_d$, $W_w$
+
+To compute the log determinant in the case of the full model (model 9), we code the function **fodet1()**. The input arguments are: 
+
+```{bash, eval = F}
+fodet1(parms, traces, n)
+```
+
+* **parms**, a **numeric** vector containing $\rho_1$, $\rho_2$, $\rho_3$, 
+* **traces**, a **numeric** vector containing the estimated traces of $W$, $W^2$, ...,$W^{miter}$, 
+* **n**, the sample size. 
+
+```{r, echo = T}
+source("./R/fodet1.R")
+```
+
+
+#### Case with only one spatial weight matrix ($W_o$, $W_d$ or $W_w$)
+
+In the particular case where there is a single spatial weight matrix (model 2 to 6 in Lesage and Pace, 2008), the algorithm is much simpler because the computation of $Ln|I_N-\rho W_S|$ where $S=o,d,w,o+d,o+d+w$ can be expressed directly as a function of the Jacobian of $W$. First, the user has to compute the trace of the matrix $W$ by using the function *ftrace1()* and then compute the log determinant by using the function *lndetmc()*.
+
+The function takes as input arguments: 
+
+```{bash, eval = F}
+lndetmc(parms, traces, n)
+```
+
+* **parms**, a scalar usually corresponding to the value of $\rho$,
+* **traces** a vector of numeric corresponding to the eigen values of spatial weight matrix $W$,
+* **n**, an integer, the size of the sample.
+
+
+```{r, echo = T}
+source("./R/lndetmc.R")
+```
+
+In the case of a small matrix, we use the exact values of the traces of $W$, $W^2$, $W^3$, ...
+
+```{r}
+lndetmc(0.25, traces, n_au)
+```
+
+In the case of a larger matrix, one can use the approximation:
+
+```{r}
+lndetmc(0.25, traces_approx, n_au)
+```
+
+#### Case of two spatial weight matrices 
+
+One can useformula (29) of Lesage and Pace (2008) to sum the log determinants of the two spatial weight matrices. For example, if $\rho_o=0.4$ and $\rho_d=0.2$, then the log determinant is equal to:
+
+```{r}
+lndetmc(0.4, traces_approx, n_au) + lndetmc(0.2, traces_approx, n_au)
+```
+
+
+
+### Evaluation of the log likelihood conditionnally to $\rho$  ###
+
+The function *c_sarf()* takes as arguments:
+
+```{bash, eval = F}
+c_sarf(rho, sige, Q, traces, n, nvars)
+```
+
+* **rho**, a vector containing the estimated values of $\rho_d$, $\rho_d$, $\rho_w$, 
+* **sige**, the value of $\sigma^2$
+* **Q**, cross-product matrix of the various component residuals
+* **traces** a vector of numeric corresponding to the eigenvalues of the spatial weight matrix $W$,
+* **n**, an integer, the sample size.
+
+
+
+```{r, echo = T}
+source("./R/c_sarf.R")
+```
+
+
+### Function *sar_flow()* model ###
+
+It takes as input arguments : 
+  
+```{bash, eval = F}
+sar_flow(x, Y, G, w, ind_d = NULL, ind_o = NULL, model = "model_9")
+```
+
+* **x**, a **data.frame** or a matrix with explanatory variables observed on the $n$ geographical sites.
+* **Y**, the matrix of flows of size $n \times n$,
+* **G**, the matrix of distances of size $n \times n$,
+* **w**, the spatial weight matrix of size $n \times n$,
+* **ind_d**, the indices of the variables in **x** which will be used at the destination,
+* **ind_o**, the indices of the variables in **x** of the variables used at the origin.
+
+
+```{r, echo = F}
+source("./R/sar_flow.R")
+```
+
+### Function *sar_flow_2()* model ###
+
+In the case when $N \leq n^2$, users have to present the data in vectorized form. It is also possible to use this function when $N = n^2$,
+
+It takes as input arguments : 
+  
+* **x**, a **data.frame** or a matrix with explanatory variable observed on the $N$ flows.
+* **Y**, the vector of flows of size $N$,
+* **g**, the vector of distances of size $N$,
+* **W_d**, spatial weight matrix of size $N \times N$,
+* **W_o**, spatial weight matrix of size $N \times N$,
+* **W_w**, spatial weight matrix of size $N \times N$,
+* **ind_d**, the indices of the variables in **x** which will be used at the destination,
+* **ind_o**, the indices of the variables in **x** used at the origin.
+
+```{bash, eval = F}
+sar_flow_2(x, y, g, W_d, W_o, W_w, 
+           ind_d = NULL, ind_o = NULL, model = "")
+```
+
+```{r, echo = F}
+source("./R/sar_flow_2.R")
+```
+
+
+### Application to the toy data
+
+#### Model 2
+
+##### Bayesian estimation
+
+We evaluate model 2 when $Y$ corresponds to the DGP used with model 2. <!-- We choose to include characteristics $x_1$ only at destination and $x_2$ only at origin.  -->
+  
+We compare the estimates obtained when we used the method $N= n^2$ and when we used the method $N\leq n^2$ .
+
+```{r, eval = F}
+system.time(sar_simu_2_method1 <- sar_flow(x = matrix(au_df$x, 
+                                nrow = 8, dimnames = list(1:8, "x")), 
+                                Y = Y_au_2, 
+                                G = G_au, 
+                                w = w_au,  
+                                model = "model_2",
+                                lagged = T) 
+)
+sar_simu_2_method1
+```
+
+
+```{r, echo= F, eval = T}
+load("sar_simu_2_sdm.RData")
+sar_simu_2_method1
+```
+
+Both methods give approximatly the same estimates. The first one is obtained in 6.5s when the second is obtained in 54s.  
+
+```{r, eval = F}
+system.time(sar_simu_2_method2 <- sar_flow_2(x = flows_au[, c("x_d", "W_dx_d", 
+                                                                "x_o", "W_ox_o")], 
+                                             y = flows_au$y_2, 
+                                             g = flows_au$g, 
+                                             W_d = W_au_d,  
+                                             model = "model_2", centered = F) 
+)
+sar_simu_2_method2
+```
+
+```{r, echo= F, eval = T}
+load("sar_simu_2_sdm.RData")
+sar_simu_2_method2
+```
+
+```{r, echo= F, eval = F}
+save(sar_simu_2_method1, sar_simu_2_method2, file = "sar_simu_2_sdm.RData")
+```
+
+
+
+##### Comparaison with the log-likelihood estimation
+
+We compare the results with the *lagsarlm()* function and we remark that we obtain similar results :(results are obtained in less than 1s).
+
+```{r, message = F}
+result_lagsarlm <- lagsarlm(y_2 ~ x_d + W_dx_d + x_o + W_ox_o + g, 
+                            data = flows_au, 
+                            mat2listw(W_au_d))
+summary(result_lagsarlm)
+```
+
+##### Comparaison with the S2SLS estimation
+
+We remark that we canno't use S2SLS method because of inversion problems.
+
+```{r, eval = F}
+result_s2sls<- stsls(y_2 ~ x_d + W_dx_d + x_o + W_ox_o + g, 
+                           data = flows_au, 
+                           mat2listw(W_au_d))
+summary(result_s2sls)
+```
+
+We coded the S2SLS for a general spatial model flow (model 9). The codes are in the *s2sls_flow()* function which takes as input arguments : 
+
+```{bash, eval = F}
+s2sls_flow(x_d, x_o, y, g, W_d = NULL, W_o = NULL, W_w = NULL)
+```
+
+* **x_d**, a **data.frame** or a matrix with the destination explanatory variables observed on the $N$ flows.
+* **x_o**, a **data.frame** or a matrix with the origin explanatory variables observed on the $N$ flows.
+* **y**, the vector of flows of size $N$,
+* **g**, the vector of distances of size $N$,
+* **W_d**, the spatial weight destination matrix of size $N \times N$,
+* **W_o**, the spatial weight origin matrix of size $N \times N$,
+* **W_w**, the spatial weight matrix of size $N \times N$,
+
+
+```{r, echo = F}
+source("./R/s2sls_flow.R")
+```
+
+
+
+```{r}
+(sar_simu_2_sls <- s2sls_flow(x_d = flows_au[, c("x_d", "W_dx_d")],
+                              x_o = flows_au[, c("x_o", "W_ox_o")],
+                              y = flows_au$y_2, 
+                              g = flows_au$g, 
+                              instru_x_d = c(F, T),
+                              instru_x_o = c(F, F),
+                              W_d = W_au_d)) 
+
+```
+
+
+
+#### Model 9
+
+##### Bayesian estimation 
+
+We evaluate model 9 when $Y$ corresponds to the DGP used with model 9 by using the full matrix. Computation was done in 376s by using the full matrix.
+
+```{r, eval = F, echo = F}
+system.time(sar_simu_9_method1 <- sar_flow(x = matrix(au_df$x, 
+                            nrow = 8, dimnames = list(1:8, "x")), 
+                                     Y = Y_au_9, 
+                                     G = G_au, 
+                                     w = w_au,  
+                                     model = "model_9",
+                                     lagged = T) 
+)
+```
+
+
+```{r, echo = F}
+load("sar_simu_9_sdm.RData")
+sar_simu_9_method1
+```
+
+We evaluate model 9 when $Y$ corresponds to the DGP used with model 9 by using the second method. Computation was done in 335s.
+
+```{r, eval = F}
+system.time(sar_simu_9_method2 <- sar_flow_2(x = flows_au[, c("x_d", "W_dx_d", 
+                                                                "x_o", "W_ox_o")], 
+                                     y = flows_au$y_9, 
+                                     g = flows_au$g, 
+                                     W_d = W_au_d, W_o = W_au_o, W_w = W_au_w, 
+                                     model = "model_9", centered = F) 
+)
+```
+
+```{r, echo = F}
+sar_simu_9_method2
+```
+
+```{r, echo = F, eval = F}
+save(sar_simu_9_method1, sar_simu_9_method2, file = "sar_simu_9_sdm.RData")
+```
+
+
+
+##### S2SLS estimation
+
+```{r}
+(sar_simu_9_sls <- s2sls_flow(x_d = flows_au[, c("x_d", "W_dx_d")],
+                              x_o = flows_au[, c("x_o", "W_ox_o")],
+                              y = flows_au$y_9, 
+                              g = flows_au$g,
+                              instru_x_d = c(F, T),
+                              instru_x_o = c(F, F),
+                              W_o = W_au_o, 
+                              W_d = W_au_d,
+                              W_w = W_au_w)) 
+
+```
+
+
+# Interpreting the results #
+
+## Understanding the decomposition of impacts
+
+With the bayesian estimates obtained below in the model 9, one could obtain the predictions by using for example the IC formula (Goulard et al, 2017). 
+
+```{r}
+delta_estimates <- sar_simu_9_method1[c("(intercept)", "x_d", "x_o", 
+                                "lagged_x_d", "lagged_x_o", "g"), "mean" ]
+#delta_estimates <- c(0, 1, 0.5, 0, 0, -0.5 )
+rho_estimates <- sar_simu_9_method1[c("rho_d", "rho_o", "rho_w"), "mean" ]
+#rho_estimates <- c(0.4, 0.4, -0.16)
+A_W <- solve(diag(n_au ^ 2) - rho_estimates[1] * W_au_d -
+                   rho_estimates[2] * W_au_o - rho_estimates[3] * W_au_w)
+Y_predict <- A_W %*% Z_au %*% delta_estimates
+```
+
+Lesage and Pace (2004) illustrate the concept of spillovers in the general case a SAR model. They look the effect on the predictions when they increase by one unit the explanatory variable for one observation. Here we increase the variable $x$ by one unit in the observation R3. For doing that we create a function which permits to transform the data.frame.
+
+```{r}
+epsilon_when_change_one_unit <- function (which_unit, x, g, W_d, W_o, A_W,
+                                          delta_estimates, Y_predict, 
+                                          change_xo = T, change_xd = T) {
+  n <- length(x)
+  N <- n * n
+  add_1 <- numeric(n)
+  add_1[which_unit] <- 1
+  x_changed <- x + add_1
+  if (change_xo) {
+    x_o <- kronecker(x_changed, rep(1, n))
+  } else {
+    x_o <- kronecker(x, rep(1, n))  
+  }
+  if (change_xd) {
+    x_d <- kronecker(rep(1, n), x_changed) 
+  } else {
+    x_d <- kronecker(rep(1, n), x) 
+  }
+  Z_changed <- cbind(rep(1, N), x_d, x_o, W_d %*% x_d, W_o %*% x_o, g)
+  Y_predict_changed <- A_W %*% Z_changed %*% delta_estimates
+  return(as.numeric(Y_predict_changed - Y_predict))
+}
+```
+
+Now, we look at the differences obtained between the predictions and we can observe that when  changing only observation R3, it impacted all the flows. 
+
+```{r}
+matrix(epsilon_when_change_one_unit(3, au_df$x, flows_au$g,
+                                    as.matrix(W_au_d), as.matrix(W_au_o),
+                                    A_W, delta_estimates, Y_predict), 8, 8, byrow = T)
+```
+
+Lesage and Thomas-Agnan (2014) propose to summarize the impacts into 4 main groups :
+
+* The OD which consists in summing up all the flows which have $R3$ as origin (and excluding the intra) which correspond to the 3rd row,
+* The DE which consists in summing up all the flows which have $R3$ as destination (and excluding the intra) which correspond to the 3rd column,
+* The intra which consists in the intra flow $R3$ (3rd row, 3rd column) 
+* The NE which consists in the rest of the flows 
+
+Then, to have an overview of all the impacts, one can change from one unit all the observations, and then summarize the impacts as seen previously :
+
+```{r}
+res <- matrix(0, 5, 4)
+for (i in 1:3) {
+  
+  if (i == 1 | i == 2) {
+    change_xo = T
+    if (i == 1) 
+      change_xd = T
+    else 
+      change_xd = F
+  }
+  
+  if (i == 3) {
+    change_xo = F
+    change_xd = T
+  }
+  
+OE <- matrix(0, 8, 8)
+DE <- matrix(0, 8, 8)
+NE <- matrix(0, 8, 8)
+intra <- matrix(0, 8, 8)
+total <- matrix(0, 8, 8)
+for (k in 1:8) {
+  change_Rk <- matrix(epsilon_when_change_one_unit(k, au_df$x, flows_au$g,
+                                                   as.matrix(W_au_d), as.matrix(W_au_o),
+                                                   A_W, delta_estimates, Y_predict, 
+                                                   change_xo = change_xo, 
+                                                   change_xd = change_xd), 
+                      8, 8, byrow = T)
+  intra[k, k] <- intra[k, k] + change_Rk[k, k]
+  OE[k, ] <- change_Rk[k, ]
+  OE[k, k] <- 0
+  DE[, k] <- change_Rk[, k]
+  DE[k, k] <- 0  
+  NE[!((1:8) %in% k), !((1:8) %in% k)] <- NE[!((1:8) %in% k), !((1:8) %in% k)] + change_Rk[!((1:8) %in% k), !((1:8) %in% k)]
+}
+
+# to obtain the final results
+res[1:4, i] <- c(mean(OE), mean(DE), mean(intra), mean(NE))
+}
+res[, 4] <- apply(res[, 2:3], 1, sum)
+res[5, ] <- apply(res, 2, sum)
+rownames(res) <- c("Origin", "Destination", "Intra",
+                   "Network", "Total")
+colnames(res) <- c("delta_x", "delta_xo", "delta_xd", "delta_xo + delta_xd")
+```
+
+Finally, we obtain that table :
+```{r}
+res
+```
+
+## Computation 
+
+Herby, we try to simplify the computations of the impacts. 
+
+### Computation of $A(W)$
+
+We compute the matrix $A(W) = (I_{N\times N} - \rho_oW_o -\rho_dW_d-\rho_wW_W)^{-1}$. We use the funtion *powerWeights()* which computes the power of matrix.
+
+```{bash, eval = F}
+powerWeights(W, rho, order = 250, X, 
+   tol = .Machine$double.eps^(3/5))
+```
+
+```{r, echo = F}
+source("./R/powerWeights.R")
+```
+
+## Application on the Model 2 (simulated data)
+  
+We separate origin and destination estimates :
+```{r}
+hat_beta_d <- sar_simu_9_method1["x_d", "mean"]
+#hat_beta_d <- 1
+names(hat_beta_d) <- "x_d"
+hat_beta_o <- sar_simu_9_method1["x_o", "mean"]
+#hat_beta_o <- 0.5
+names(hat_beta_o) <- "x_o"
+hat_delta_d <- sar_simu_9_method1["lagged_x_d", "mean"]
+#hat_delta_d <- 0
+names(hat_delta_d) <- "Wd_xd"
+hat_delta_o <- sar_simu_9_method1["lagged_x_o", "mean"]
+#hat_delta_o <- 0
+names(hat_delta_o) <- "Wo_xo"
+```
+
+We compute $A(W)$: 
+
+```{r}
+W_hat <- rho_estimates[1] * W_au_d + rho_estimates[2] * W_au_o +
+  rho_estimates[3] * W_au_w
+AW <- powerWeights(W_hat, 1, order = 250, Diagonal(nrow(W_hat)), 
+                   tol = .Machine$double.eps^(3/5))
+```
+
+We may need to compute $A(W)\times W$ in the case of the SDM model: 
+
+```{r}
+AW_Wo <- AW %*% W_au_o
+AW_Wd <- AW %*% W_au_d
+```
+
+We need to identify each origin and destination:
+```{r}
+all_dest <- flows_au[, "dest"] 
+all_origin <- flows_au[, "origin"]
+```
+
+We coded the function *OE_impact()*, *DE_impact()*, *NE_impact()*, *intra_impact()* which take as argument : 
+
+* **AW**, the matrix $A(W)$,
+* **AW_W**, the matrix $A(W) \times W$ if the model is spatial Durbin,
+* **all_dest**, a vector which contains the id of the destination in $A(W)$, 
+* **all_origin**, a vector which contains the id of the origin in $A(W)$, 
+
+
+### Origin effect
+
+```{r}
+source("./R/OE_impact.R")
+```
+
+To get the origin effect:
+```{r}
+origin_effect <- OE_impact(AW, AW_Wd = AW_Wd, AW_Wo = AW_Wo, 
+                           all_dest, all_origin) 
+  
+(OE <- (origin_effect[[1]] * hat_beta_o + origin_effect[[2]] * hat_beta_d +
+       origin_effect[[3]] * hat_delta_o + origin_effect[[4]] * hat_delta_d  ) / n_au^2)
+```
+
+### Destination effect
+
+```{r}
+source("./R/DE_impact.R")
+```
+
+To get the destination effect:
+```{r}
+destination_effect <- DE_impact(AW, AW_Wd = AW_Wd, AW_Wo = AW_Wo,  
+                           all_dest, all_origin) 
+  
+(DE <- (destination_effect[[1]] * hat_beta_o + destination_effect[[2]] * hat_beta_d +
+         destination_effect[[3]] * hat_delta_o + destination_effect[[4]] * hat_delta_d  ) / n_au^2) 
+```
+
+### NE effect
+
+```{r}
+source("./R/NE_impact.R")
+```
+
+To get the NE effect:
+```{r}
+ne_effect <- NE_impact(AW, AW_Wd = AW_Wd, AW_Wo = AW_Wo,
+                           all_dest, all_origin) 
+  
+(NE <- (ne_effect[[1]] * hat_beta_o + ne_effect[[2]] * hat_beta_d +
+         ne_effect[[3]] * hat_delta_o + ne_effect[[4]] * hat_delta_d  ) / n_au^2) 
+```
+
+### intra effect
+
+```{r}
+source("./R/intra_impact.R")
+```
+
+To get the intra effect:
+```{r}
+intra_effect <- intra_impact(AW, AW_Wd = AW_Wd, AW_Wo = AW_Wo, 
+                           all_dest, all_origin) 
+  
+(intra <- (intra_effect[[1]] * hat_beta_o + intra_effect[[2]] * hat_beta_d +
+         intra_effect[[3]] * hat_delta_o + intra_effect[[4]] * hat_delta_d  ) / n_au^2)
+```
+
+### Summarise
+
+```{r}
+(impacts_mod2 <- cbind(OE, DE, NE, intra))
+```
+
+
+
+**References**
+
+* LeSage J.P. and Pace R.K. (2008). Spatial econometric modeling of origin-destination flows. Journal of Regional Science, 48(5), 941–-967.
+
+*  Pebesma E.J. and Bivand R.S. (2005). Classes and methods for spatial data in **R**, R News, 5(2), 9--13.
+
+* Thomas-Agnan C. and LeSage J.P. (2014). Spatial Econometric OD-Flow Models. In: Fischer M., Nijkamp P. (eds) Handbook of Regional Science. Springer, Berlin, Heidelberg.  
