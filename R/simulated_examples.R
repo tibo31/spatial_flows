@@ -40,13 +40,24 @@ y_usa <- c(7, 7, rep(6, 3), rep(5, 9), rep(4, 11), rep(3, 10),
 sp_usa <- SpatialPointsDataFrame(cbind(x_usa, y_usa), usa_df)
 
 # grid
-x_grid <- rep(0:9, 10)
-y_grid <- rep(9:0, each = 10)
-id_region_grid <- paste0("R", 1:(10 * 10))
-grid_df <- data.frame(id = id_region_grid,
-                     x = round(sqrt(x_grid^2 + y_grid^2), 0), 
+# origin
+x_grid_o <- rep(0:5, 5)
+y_grid_o <- rep(4:0, each = 6)
+id_region_grid_o <- paste0("O_", 1:(6 * 5))
+grid_df_o <- data.frame(id = id_region_grid_o,
+                     x = round(15 + sqrt(1 + 5 * x_grid_o^2 + 4 * y_grid_o^2), 0), 
                      row.names = "id")
-sp_grid <- SpatialPointsDataFrame(cbind(x_grid, y_grid), grid_df)
+sp_grid_o <- SpatialPointsDataFrame(cbind(x_grid_o, y_grid_o), grid_df_o)
+
+# destination
+x_grid_d <- rep(8:10, 4)
+y_grid_d <- rep(4:1, each = 3)
+id_region_grid_d <- paste0("D_", 1:(4 * 3))
+grid_df_d <- data.frame(id = id_region_grid_d,
+                        z = round(30 + sqrt(1 + 5 * x_grid_d^2 + 4 * y_grid_d^2), 0), 
+                        row.names = "id")
+sp_grid_d <- SpatialPointsDataFrame(cbind(x_grid_d, y_grid_d), grid_df_d)
+
 
 create_grid <- function(sp_centroid) {
   # initialization
@@ -55,7 +66,7 @@ create_grid <- function(sp_centroid) {
   id <- row.names(sp_centroid)
   nx <- length(unique(coords[, 1])) 
   ny <- length(unique(coords[, 2]))  
-  gt <- GridTopology(c(0, 0), c(1, 1), c(nx, ny))
+  gt <- GridTopology(c(min(coords[, 1]), min(coords[, 2])), c(1, 1), c(nx, ny))
   grd <- SpatialGrid(gt)
   spix <- as(grd, "SpatialPixels")
   spol <- as(spix, "SpatialPolygons")
@@ -69,9 +80,11 @@ create_grid <- function(sp_centroid) {
 spdf_au <- create_grid(sp_centroid = sp_au)
 spdf_ge <- create_grid(sp_centroid = sp_ge)
 spdf_usa <- create_grid(sp_centroid = sp_usa)
-spdf_grid <- create_grid(sp_centroid = sp_grid)
+spdf_grid_o <- create_grid(sp_centroid = sp_grid_o)
+spdf_grid_d <- create_grid(sp_centroid = sp_grid_d)
 
 spdf_au$NOM <- row.names(spdf_au)
 spdf_ge$NOM <- row.names(spdf_ge)
 spdf_usa$NOM <- row.names(spdf_usa)
-spdf_grid$NOM <- row.names(spdf_grid)
+spdf_grid_o$NOM <- row.names(spdf_grid_o)
+spdf_grid_d$NOM <- row.names(spdf_grid_d)

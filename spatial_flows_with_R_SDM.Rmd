@@ -123,7 +123,7 @@ spplot(spdf_grid, "x")
 ```
 
 
-##### Transform the explanatory variables to flows 
+##### Transform the explanatory variables to origin-destination 
 
 If user wants to store the explanatory variables in a matrix of size $N\times R$, he has to use the kronecker product. We present the results for the Australian regions. The same things have been done for Germany and USA: 
 
@@ -263,6 +263,83 @@ W_grid_o <- kronecker(w_grid, Diagonal(n_grid))
 W_grid_w <- kronecker(as(w_grid, "Matrix"), w_grid)
 ```
 
+#### Origin and destination do not coincide 
+
+We prepare a grid of origins and a grid of destination. The explanatory variables at origin and at destination are not supposed to be the same. 
+
+```{r, fig = T, fig.width=10, fig.height=5, message = F, warning = F}
+plot(spdf_grid_o, xlim = c(-1, 12), ylim = c(0, 4))
+choroLayer(spdf = spdf_grid_o, var = "x", nclass = 4,
+           col = carto.pal(pal1 = "sand.pal", n1 = 4),
+           border = "white", lwd = 0.5, legend.pos = "topleft", 
+           legend.title.txt = "variable x", add = TRUE
+) 
+text(coordinates(spdf_grid_o), row.names(spdf_grid_o), cex = 0.5)
+plot(spdf_grid_d, add = T)
+choroLayer(spdf = spdf_grid_d, var = "z", nclass = 4,
+           col = carto.pal(pal1 = "green.pal", n1 = 4),
+           border = "white", lwd = 0.5, legend.pos = "topright", 
+           legend.title.txt = "variable z", add = TRUE
+) 
+text(coordinates(spdf_grid_d), row.names(spdf_grid_d), cex = 0.5)
+```
+
+##### Transform the explanatory variables to origin-destination 
+
+To store the explanatory variables in a matrix of size $N\times R$, user has to use the kronecker product separetly on origin and on destination. : 
+
+```{r}
+n_grid_o <- nrow(sp_grid_o)
+n_grid_d <- nrow(sp_grid_d)
+flows_grid <- data.frame(origin = rep(row.names(sp_grid_o), 
+                                    each = n_grid_d),
+                         dest = rep(row.names(sp_grid_d), n_grid_o),
+                       x_o = kronecker(sp_grid_o$x, rep(1, n_grid_d)),
+                       z_d = kronecker(rep(1, n_grid_o), sp_grid_d$z))
+head(flows_grid)
+```
+
+##### Distances between locations
+
+The distances between flows can be presented in a matrix of size $n_d \times n_o$. We use the function *gDistance()* from package **rgeos** (Bivand and Rundel, 2019). 
+
+```{r}
+G_grid <- rgeos::gDistance(sp_grid_o, sp_grid_d, byid = T)
+```
+
+It can be also added to the data.frame which presents the data by flow
+
+```{r}
+flows_grid$g <- as.vector(G_grid)
+```
+
+##### Construct the spatial weight matrices 
+
+To define the spatial weight matrics on the geographical sites, we use the contiguity properties for origin and destination.
+
+```{r}
+w_grid_o_nb <- poly2nb(spdf_grid_o)
+w_grid_o <- listw2mat(nb2listw(w_grid_o_nb))
+w_grid_d_nb <- poly2nb(spdf_grid_d)
+w_grid_d <- listw2mat(nb2listw(w_grid_d_nb))
+```
+
+To build the spatial weight matrices $W_o$, $W_d$ and $W_w$, user has to use the Kronecker products. 
+
+```{r}
+W_grid_d <- kronecker(Diagonal(n_grid_o), w_grid_d)
+W_grid_o <- kronecker(w_grid_o, Diagonal(n_grid_d))
+W_grid_w <- W_grid_o %*% W_grid_d
+```
+
+We prepare the lagged explanatory variables:
+
+```{r}
+flows_grid$W_dz_d <- as.matrix(W_grid_d) %*% flows_grid$z_d
+flows_grid$W_ox_o <- as.matrix(W_grid_o) %*% flows_grid$x_o
+```
+
+
 ### DGP of the $Y$ variables ###
 
 We simulate 9 different SDM interaction models: 
@@ -319,13 +396,13 @@ DGP_flow_sdm(z, delta, rho, W_d, W_o, W_w,
              seed = NULL, sigma = 1, message = F)
 ```
 
-* **z**, the matrix containing the variables,
+* **z**, the matrix containing the explanatory variables,
 * **delta**, the vector of parameters,
 * **rho**, the vector with $(\rho_d,\rho_o,\rho_w)$
 * **W_o**, **W_d**, **W_w** the spatial weight matrices of size $N\times N$
 * **seed**, an integer value for the seed 
 * **sigma**, the variance of the residuals
-* **message**, print a message to indicate the ration of signal/noise. 
+* **message**, print a message to indicate the ratio of signal/noise. 
 
 ```{r}
 flows_au[, c("y_9", "y_8", "y_7", "y_6", "y_5", 
@@ -358,7 +435,7 @@ Y_au_0 <- matrix(flows_au$y_0, n_au, n_au)
 ```
 
 
-We have done the same things for Germany and USA.
+We have done the same things for Germany, USA and the grid examples.
 
 ```{r}
 Z_ge <- cbind(1, flows_ge$x_d, flows_ge$x_o, 
@@ -415,9 +492,9 @@ Y_usa_0 <- matrix(flows_usa$y_0, n_usa, n_usa)
 ```
 
 
-```{r, echo = F, eval = F}
-Z_grid <- cbind(1, flows_grid$x_d, flows_grid$x_o, 
-              as.numeric(W_grid_d %*% as(flows_grid$x_d, "sparseVector")), 
+```{r}
+Z_grid <- cbind(1, flows_grid$z_d, flows_grid$x_o, 
+              as.numeric(W_grid_d %*% as(flows_grid$z_d, "sparseVector")), 
               as.numeric(W_grid_o %*% as(flows_grid$x_o, "sparseVector")), 
               flows_grid$g)
 flows_grid[, c("y_9", "y_8", "y_7", "y_6", "y_5", 
@@ -426,8 +503,7 @@ flows_grid[, c("y_9", "y_8", "y_7", "y_6", "y_5",
                W_d = W_grid_d, 
                W_o = W_grid_o, 
                W_w = W_grid_w, 
-               seed = 1234, sigma = 1, message = T,
-               method = "power")
+               seed = 123, sigma = 1, message = T)
 ```
 
 ```{r, echo = F, eval = F}
@@ -445,7 +521,60 @@ Y_grid_0 <- matrix(flows_grid$y_0, n_grid, n_grid)
 
 # Data Vizualization #
 
-We use here the package **cartography** (Giraud and Lambert, 2016) for representing the flows.
+## Origin and destination coincide 
+
+We have first to create a Spatial object containing both origin and destinations spatial units.
+```{r}
+spdf_grid_o_d <- spRbind(spdf_grid_o[, "NOM"], spdf_grid_d[, "NOM"])
+```
+
+```{r}
+mtq_mob <- getLinkLayer(
+  x = spdf_grid_o_d, 
+  xid = "NOM", 
+  df = flows_grid, 
+  dfid = c("origin","dest")
+)
+```
+
+We discretize the variable $y_9$:
+```{r}
+breaks <- quantile(flows_grid$y_9, c(0, 0.9, 0.925, 0.95, 0.975, 1))
+flows_grid$y_9_discret <- cut(flows_grid$y_9, breaks,
+                            include.lowest = T)
+```
+
+We plot the biggest flows only.
+
+```{r}
+par(bg = "grey25", oma = c(0, 0, 0, 0),
+    mar = c(0, 0, 0, 0), mai = c(0, 0, 0, 0))
+# plot municipalities
+plot(spdf_grid_o_d, col = "grey13", border = "grey25", 
+     bg = "grey25", lwd = 0.5)
+# plot graduated links
+gradLinkTypoLayer(
+  x = mtq_mob, 
+  xid = c("origin","dest"),
+  df = flows_grid, 
+  dfid = c("origin","dest"),
+  var = "y_9", 
+  breaks = breaks[2:6],
+  lwd = c(1, 4, 8, 16),
+  var2 = "y_9_discret", 
+  legend.var.pos = "left",
+  legend.var.title.txt = "Nb. of\nTrade",
+) 
+
+# map layout
+layoutLayer(title = "Trades", 
+            sources = "Simulated data",  
+            author = paste0("cartography ", packageVersion("cartography")), 
+            frame = FALSE, col = "grey25", coltitle = "white",
+            tabtitle = TRUE)
+```
+
+## Origin and destination do not coincide 
 
 ```{r}
 mtq_mob <- getLinkLayer(
@@ -493,7 +622,6 @@ layoutLayer(title = "Trades",
             tabtitle = TRUE)
 ```
 
-
 # Non spatial modelling #
 
 ## Gravity model ##
@@ -526,7 +654,7 @@ source("./R/gravity_model.R")
 
 ## Applications ##
 
-### With the toy data ###
+### With the Australian simulated data ###
 
 ```{r}
 gravity_model(x = as.matrix(spdf_au@data$x), Y = Y_au_0, G = G_au)
@@ -551,12 +679,12 @@ summary(gravity_flows)
 
 # Spatial Modelling # 
 
-When the number of flows $N$ is equal to $n^2$, this implies some simplifications in the computations. However, this is not always the case in practice. That is why we consider the two options :
+When the number of flows $N$ is equal to $n_o\times n_d$, this implies some simplifications in the computations. However, this is not always the case in practice. That is why we consider the two options :
 
-* $N = n^2$
-* $N < n^2$ 
+* $N =n_o\times n_d$
+* $N < n_o\times n_d$ 
 
-## Spatial Autoregressive Interaction Models when $N = n \times n$ ##
+## Spatial Autoregressive Interaction Models when $N = n_o\times n_d$ ##
 
 We use the Bayesian SAR method for estimating the parameters. Before estimating the parameters in the SAR flows model, we have to create intermediate functions :
 
@@ -564,7 +692,7 @@ We use the Bayesian SAR method for estimating the parameters. Before estimating 
 ftrace1(w, method = "exact", miter = 10, riter = 50)
 ```
 
-* *ftrace1()*, which computes the trace of the spatial weight matrices $W$, $W^2$, $W^3$, ..., $W^{miter}$,
+* *ftrace1()*, which computes the traces of the spatial weight matrices $W$, $W^2$, $W^3$, ..., $W^{miter}$,
 * *fodet1()*, which computes the jacobian matrix in the case of the model (9), i.e. the model with the 3 spatial weight matrices $W_o$, $W_d$, $W_w$
 * *lndetmc()*, which computes the jacobian matrix in the case of a model with only one spatial weight matrix,
 * *c_sarf()*, which computes the log likelihood conditionnally to $\rho$.
@@ -642,7 +770,7 @@ lndetmc(0.25, traces_approx, n_au)
 
 #### Case of two spatial weight matrices 
 
-One can useformula (29) of Lesage and Pace (2008) to sum the log determinants of the two spatial weight matrices. For example, if $\rho_o=0.4$ and $\rho_d=0.2$, then the log determinant is equal to:
+One can use formula (29) of Lesage and Pace (2008) to sum the log determinants of the two spatial weight matrices. For example, if $\rho_o=0.4$ and $\rho_d=0.2$, then the log determinant is equal to:
 
 ```{r}
 lndetmc(0.4, traces_approx, n_au) + lndetmc(0.2, traces_approx, n_au)
