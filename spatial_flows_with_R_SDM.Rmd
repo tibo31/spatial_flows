@@ -523,6 +523,55 @@ Y_grid_0 <- matrix(flows_grid$y_0, n_grid, n_grid)
 
 ## Origin and destination coincide 
 
+```{r}
+mtq_mob <- getLinkLayer(
+  x = spdf_au, 
+  xid = "NOM", 
+  df = flows_au, 
+  dfid = c("origin","dest")
+)
+```
+
+We discretize the variable $y_9$:
+```{r}
+breaks <- quantile(flows_au$y_9)
+flows_au$y_9_discret <- cut(flows_au$y_9, breaks,
+                            include.lowest = T)
+```
+
+We plot all the flows.
+
+```{r}
+par(bg = "grey25", oma = c(0, 0, 0, 0),
+    mar = c(0, 0, 0, 0), mai = c(0, 0, 0, 0))
+# plot municipalities
+plot(spdf_au, col = "grey13", border = "grey25", 
+     bg = "grey25", lwd = 0.5)
+# plot graduated links
+gradLinkTypoLayer(
+  x = mtq_mob, 
+  xid = c("origin","dest"),
+  df = flows_au, 
+  dfid = c("origin","dest"),
+  var = "y_9", 
+  breaks = breaks,
+  lwd = c(1, 4, 8, 16),
+  var2 = "y_9_discret", 
+  legend.var.pos = "left",
+  legend.var.title.txt = "Nb. of\nTrade",
+) 
+
+# map layout
+layoutLayer(title = "Trades", 
+            sources = "Simulated data",  
+            author = paste0("cartography ", packageVersion("cartography")), 
+            frame = FALSE, col = "grey25", coltitle = "white",
+            tabtitle = TRUE)
+```
+
+
+## Origin and destination do not coincide 
+
 We have first to create a Spatial object containing both origin and destinations spatial units.
 ```{r}
 spdf_grid_o_d <- spRbind(spdf_grid_o[, "NOM"], spdf_grid_d[, "NOM"])
@@ -573,55 +622,6 @@ layoutLayer(title = "Trades",
             frame = FALSE, col = "grey25", coltitle = "white",
             tabtitle = TRUE)
 ```
-
-## Origin and destination do not coincide 
-
-```{r}
-mtq_mob <- getLinkLayer(
-  x = spdf_au, 
-  xid = "NOM", 
-  df = flows_au, 
-  dfid = c("origin","dest")
-)
-```
-
-We discretize the variable $y_9$:
-```{r}
-breaks <- quantile(flows_au$y_9)
-flows_au$y_9_discret <- cut(flows_au$y_9, breaks,
-                            include.lowest = T)
-```
-
-We plot all the flows.
-
-```{r}
-par(bg = "grey25", oma = c(0, 0, 0, 0),
-    mar = c(0, 0, 0, 0), mai = c(0, 0, 0, 0))
-# plot municipalities
-plot(spdf_au, col = "grey13", border = "grey25", 
-     bg = "grey25", lwd = 0.5)
-# plot graduated links
-gradLinkTypoLayer(
-  x = mtq_mob, 
-  xid = c("origin","dest"),
-  df = flows_au, 
-  dfid = c("origin","dest"),
-  var = "y_9", 
-  breaks = breaks,
-  lwd = c(1, 4, 8, 16),
-  var2 = "y_9_discret", 
-  legend.var.pos = "left",
-  legend.var.title.txt = "Nb. of\nTrade",
-) 
-
-# map layout
-layoutLayer(title = "Trades", 
-            sources = "Simulated data",  
-            author = paste0("cartography ", packageVersion("cartography")), 
-            frame = FALSE, col = "grey25", coltitle = "white",
-            tabtitle = TRUE)
-```
-
 # Non spatial modelling #
 
 ## Gravity model ##
@@ -675,6 +675,26 @@ summary(gravity_flows)
 **Remark 1:** Unsurprisingly, we find the same values of the estimates for $\beta_o$, $\beta_d$ and $\gamma$ than those obtained with the function *gravity_model()*. The estimate of the intercept is different because the data have been centered. 
 
 **Remark 2:** to compute the estimates with the *lm()* function, the user needs to work with the full matrix of size $N \times 2p$ where $p$ is the number of explanatory variable. 
+
+### Comparison of computationnal times according to the size ###
+
+```{r, echo = F}
+time_lm_full_au <- system.time(gravity_model(x = as.matrix(spdf_au@data$x), 
+                                             Y = Y_au_0, G = G_au))
+time_lm_full_ge <- system.time(gravity_model(x = as.matrix(spdf_ge@data$x), 
+                                             Y = Y_ge_0, G = G_ge))
+time_lm_full_usa <- system.time(gravity_model(x = as.matrix(spdf_usa@data$x), 
+                                             Y = Y_usa_0, G = G_usa))
+time_lm_vect_au <- system.time(lm(y_0 ~ x_d + x_o + g, data = flows_au))
+time_lm_vect_ge <- system.time(lm(y_0 ~ x_d + x_o + g, data = flows_ge))
+time_lm_vect_usa <- system.time(lm(y_0 ~ x_d + x_o + g, data = flows_usa))
+(time_gravity <- data.frame(matrix = c(time_lm_full_au[3], time_lm_full_ge[3], 
+                                      time_lm_full_usa[3]),
+                           vector = c(time_lm_vect_au[3], time_lm_vect_ge[3],
+                                      time_lm_vect_usa[3]),
+                           row.names = c("au", "ge", "usa")))  
+```
+
 
 
 # Spatial Modelling # 
@@ -856,7 +876,7 @@ We compare the estimates obtained when we used the method $N= n^2$ and when we u
 
 ```{r, eval = F}
 system.time(sar_simu_2_method1 <- sar_flow(x = matrix(au_df$x, 
-                                nrow = 8, dimnames = list(1:8, "x")), 
+                                nrow = n_au, dimnames = list(1:n_au, "x")), 
                                 Y = Y_au_2, 
                                 G = G_au, 
                                 w = w_au,  
@@ -895,6 +915,59 @@ save(sar_simu_2_method1, sar_simu_2_method2, file = "sar_simu_2_sdm.RData")
 ```
 
 
+**Computationnal time of the Spatial Interaction Durbin Model 2** according to the size of the samples:
+
+```{r, eval = F, echo = F}
+time_au_bayes_1 <- system.time(sar_simu_2_method1 <- sar_flow(
+  x = matrix(au_df$x, nrow = n_au, dimnames = list(1:n_au, "x")), 
+  Y = Y_au_2, G = G_au, w = w_au, model = "model_2", lagged = T) 
+)
+time_au_bayes_2 <- system.time(sar_simu_2_method2 <- sar_flow_2(
+  x = flows_au[, c("x_d", "W_dx_d", "x_o", "W_ox_o")], 
+  y = flows_au$y_2, g = flows_au$g, W_d = W_au_d, 
+  model = "model_2", centered = F) 
+)
+
+time_ge_bayes_1 <- system.time(sar_simu_2_ge_method1 <- sar_flow(
+  x = matrix(ge_df$x, nrow = n_ge, dimnames = list(1:n_ge, "x")), 
+  Y = Y_ge_2, G = G_ge, w = w_ge, model = "model_2", lagged = T) 
+)
+time_ge_bayes_2 <- system.time(sar_simu_2_ge_method2 <- sar_flow_2(
+  x = flows_ge[, c("x_d", "W_dx_d", "x_o", "W_ox_o")], 
+  y = flows_ge$y_2, g = flows_ge$g, W_d = W_ge_d, 
+  model = "model_2", centered = F) 
+)
+
+time_usa_bayes_1 <- system.time(sar_simu_2_usa_method1 <- sar_flow(
+  x = matrix(usa_df$x, nrow = n_usa, dimnames = list(1:n_usa, "x")), 
+  Y = Y_usa_2, G = G_usa, w = w_usa, model = "model_2", lagged = T) 
+)
+time_usa_bayes_2 <- system.time(sar_simu_2_usa_method2 <- sar_flow_2(
+  x = flows_usa[, c("x_d", "W_dx_d", "x_o", "W_ox_o")], 
+  y = flows_usa$y_2, g = flows_usa$g, W_d = W_usa_d, 
+  model = "model_2", centered = F) 
+)
+```
+
+```{r, echo = F, eval = F}
+save(time_au_bayes_1, time_ge_bayes_1, time_usa_bayes_1, 
+     time_au_bayes_2, time_ge_bayes_2, time_usa_bayes_2,
+     file = "time_bayes_mod2.RData")
+```
+
+```{r, echo = F}
+load("time_bayes_mod2.RData")
+```
+
+```{r, echo = F}
+(time_bayesian_sdm <- data.frame(matrix = c(time_au_bayes_1[3], time_ge_bayes_1[3], 
+                                      time_usa_bayes_1[3]),
+                           vector = c(time_au_bayes_2[3], time_ge_bayes_2[3],
+                                      time_usa_bayes_2[3]),
+                           row.names = c("au", "ge", "usa")))  
+```
+
+
 
 ##### Comparaison with the log-likelihood estimation
 
@@ -905,6 +978,25 @@ result_lagsarlm <- lagsarlm(y_2 ~ x_d + W_dx_d + x_o + W_ox_o + g,
                             data = flows_au, 
                             mat2listw(W_au_d))
 summary(result_lagsarlm)
+```
+
+
+**Computational time** with respect to the size of the samples:
+
+```{r, echo = F}
+time_au_lagsarlm <- system.time(lagsarlm(y_2 ~ x_d + W_dx_d + x_o + W_ox_o + g, 
+                      data = flows_au, mat2listw(W_au_d)))
+time_ge_lagsarlm <- system.time(lagsarlm(y_2 ~ x_d + W_dx_d + x_o + W_ox_o + g, 
+                      data = flows_ge, mat2listw(W_ge_d)))
+time_usa_lagsarlm <- system.time(lagsarlm(y_2 ~ x_d + W_dx_d + x_o + W_ox_o + g, 
+                      data = flows_usa, mat2listw(W_usa_d)))
+```
+
+```{r, echo = F}
+(time_lagsarlm_sdm <- data.frame(vector = c(time_au_lagsarlm[3], 
+                                            time_ge_lagsarlm[3],
+                                            time_usa_lagsarlm[3]),
+                                 row.names = c("au", "ge", "usa")))  
 ```
 
 ##### Comparaison with the S2SLS estimation
@@ -937,8 +1029,6 @@ s2sls_flow(x_d, x_o, y, g, W_d = NULL, W_o = NULL, W_w = NULL)
 source("./R/s2sls_flow.R")
 ```
 
-
-
 ```{r}
 (sar_simu_2_sls <- s2sls_flow(x_d = flows_au[, c("x_d", "W_dx_d")],
                               x_o = flows_au[, c("x_o", "W_ox_o")],
@@ -947,10 +1037,45 @@ source("./R/s2sls_flow.R")
                               instru_x_d = c(F, T),
                               instru_x_o = c(F, F),
                               W_d = W_au_d)) 
-
 ```
 
+**Computational time** with respect to the size of the samples:
 
+```{r, echo = F}
+time_au_stsls <- system.time(s2sls_flow(
+  x_d = flows_au[, c("x_d", "W_dx_d")],
+  x_o = flows_au[, c("x_o", "W_ox_o")],
+  y = flows_au$y_2, 
+  g = flows_au$g, 
+  instru_x_d = c(F, T),
+  instru_x_o = c(F, F),
+  W_d = W_au_d))
+
+time_ge_stsls <- system.time(s2sls_flow(
+  x_d = flows_ge[, c("x_d", "W_dx_d")],
+  x_o = flows_ge[, c("x_o", "W_ox_o")],
+  y = flows_ge$y_2, 
+  g = flows_ge$g, 
+  instru_x_d = c(F, T),
+  instru_x_o = c(F, F),
+  W_d = W_ge_d))
+
+time_usa_stsls <- system.time(s2sls_flow(
+  x_d = flows_usa[, c("x_d", "W_dx_d")],
+  x_o = flows_usa[, c("x_o", "W_ox_o")],
+  y = flows_usa$y_2, 
+  g = flows_usa$g, 
+  instru_x_d = c(F, T),
+  instru_x_o = c(F, F),
+  W_d = W_usa_d))
+```
+
+```{r, echo = F}
+(time_stsls_sdm <- data.frame(vector = c(time_au_stsls[3], 
+                                            time_ge_stsls[3],
+                                            time_usa_stsls[3]),
+                                 row.names = c("au", "ge", "usa")))  
+```
 
 #### Model 9
 
@@ -960,7 +1085,7 @@ We evaluate model 9 when $Y$ corresponds to the DGP used with model 9 by using t
 
 ```{r, eval = F, echo = F}
 system.time(sar_simu_9_method1 <- sar_flow(x = matrix(au_df$x, 
-                            nrow = 8, dimnames = list(1:8, "x")), 
+                            nrow = n_au, dimnames = list(1:n_au, "x")), 
                                      Y = Y_au_9, 
                                      G = G_au, 
                                      w = w_au,  
@@ -995,6 +1120,61 @@ sar_simu_9_method2
 save(sar_simu_9_method1, sar_simu_9_method2, file = "sar_simu_9_sdm.RData")
 ```
 
+
+**Computationnal time of the Spatial Interaction Durbin Model 2** according to the size of the samples:
+
+```{r, eval = F, echo = F}
+time_au_bayes_1 <- system.time(sar_simu_9_method1 <- sar_flow(
+  x = matrix(au_df$x, nrow = n_au, dimnames = list(1:n_au, "x")), 
+  Y = Y_au_9, G = G_au, w = w_au, model = "model_9", lagged = T) 
+)
+time_au_bayes_2 <- system.time(sar_simu_9_method2 <- sar_flow_2(
+  x = flows_au[, c("x_d", "W_dx_d", "x_o", "W_ox_o")], 
+  y = flows_au$y_9, g = flows_au$g, 
+  W_d = W_au_d, W_o = W_au_o, W_w = W_au_w, 
+  model = "model_9", centered = F) 
+)
+
+time_ge_bayes_1 <- system.time(sar_simu_9_ge_method1 <- sar_flow(
+  x = matrix(ge_df$x, nrow = n_ge, dimnames = list(1:n_ge, "x")), 
+  Y = Y_ge_9, G = G_ge, w = w_ge, model = "model_9", lagged = T) 
+)
+time_ge_bayes_2 <- system.time(sar_simu_9_ge_method2 <- sar_flow_2(
+  x = flows_ge[, c("x_d", "W_dx_d", "x_o", "W_ox_o")], 
+  y = flows_ge$y_9, g = flows_ge$g, 
+  W_d = W_ge_d, W_o = W_ge_o, W_w = W_ge_w, 
+  model = "model_9", centered = F) 
+)
+
+time_usa_bayes_1 <- system.time(sar_simu_9_usa_method1 <- sar_flow(
+  x = matrix(usa_df$x, nrow = n_usa, dimnames = list(1:n_usa, "x")), 
+  Y = Y_usa_9, G = G_usa, w = w_usa, model = "model_9", lagged = T) 
+)
+time_usa_bayes_2 <- system.time(sar_simu_9_usa_method2 <- sar_flow_2(
+  x = flows_usa[, c("x_d", "W_dx_d", "x_o", "W_ox_o")], 
+  y = flows_usa$y_9, g = flows_usa$g, 
+  W_d = W_usa_d, W_o = W_usa_o, W_w = W_usa_w, 
+  model = "model_9", centered = F) 
+)
+```
+
+```{r, echo = F, eval = F}
+save(time_au_bayes_1, time_ge_bayes_1, time_usa_bayes_1, 
+     time_au_bayes_2, time_ge_bayes_2, time_usa_bayes_2,
+               file = "time_bayes_mod_9.RData")
+```
+
+```{r, echo = F, eval = T}
+load("time_bayes_mod_9.RData")
+```
+
+```{r, eval = T}
+(time_bayesian_sdm <- data.frame(matrix = c(time_au_bayes_1[3], time_ge_bayes_1[3], 
+                                      time_usa_bayes_1[3]),
+                           vector = c(time_au_bayes_2[3], time_ge_bayes_2[3],
+                                      time_usa_bayes_2[3]),
+                           row.names = c("au", "ge", "usa")))  
+```
 
 
 ##### S2SLS estimation

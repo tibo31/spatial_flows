@@ -67,16 +67,16 @@ DGP_flow_sdm <- function(z, delta, rho, W_d, W_o, W_w,
   
   if (message) {
     cat("signal/noise:\n")
-    cat("y9: ", sd(signal_9/y_9), "\n")
-    cat("y8: ", sd(signal_8/y_8), "\n")
-    cat("y7: ", sd(signal_7/y_7), "\n")
-    cat("y6: ", sd(signal_6/y_6), "\n")
-    cat("y5: ", sd(signal_5/y_5), "\n")
-    cat("y4: ", sd(signal_4/y_4), "\n")
-    cat("y3: ", sd(signal_3/y_3), "\n")
-    cat("y2: ", sd(signal_2/y_2), "\n")
-    cat("y1: ", sd(signal_1/y_1), "\n")
-    cat("y0: ", sd(signal_0/y_0), "\n")
+    cat("y9: ", mean(signal_9/abs(bruit_9)), "\n")
+    cat("y8: ", mean(signal_8/abs(bruit_8)), "\n")
+    cat("y7: ", mean(signal_7/abs(bruit_7)), "\n")
+    cat("y6: ", mean(signal_6/abs(bruit_6)), "\n")
+    cat("y5: ", mean(signal_5/abs(bruit_5)), "\n")
+    cat("y4: ", mean(signal_4/abs(bruit_4)), "\n")
+    cat("y3: ", mean(signal_3/abs(bruit_3)), "\n")
+    cat("y2: ", mean(signal_2/abs(bruit_2)), "\n")
+    cat("y1: ", mean(signal_1/abs(bruit_1)), "\n")
+    cat("y0: ", mean(signal_0/abs(bruit_0)), "\n")
   }
   
   return(cbind(y_9, y_8, y_7, y_6, y_5, y_4, y_3, y_2, y_1, y_0))
