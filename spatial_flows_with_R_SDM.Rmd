@@ -1,16 +1,13 @@
 ---
 title: "Spatial Flows Modelling with **R**"
 author: "T. Laurent, P. Margaretic, C. Thomas-Agnan"
-date: "June 4, 2019"
+date: "July 5, 2019"
 output:
   html_document:
     highlight: tango
     number_sections: yes
     toc: yes
     toc_depth: 2
-  pdf_document:
-    toc: yes
-    toc_depth: '2'
 ---
 <link href="markdown7.css" rel="stylesheet">
 
@@ -36,84 +33,90 @@ require("maptools")   # spatial
 ```
 
 
-# How to present the data in practice #
+# Data preparation #
 
-LeSage and Pace (2008, equation 20) present the spatial model specification for origin destination flows :
+LeSage and Pace (2008, equation 20) present the spatial interaction model specification for modelling origin destination flows :
 
 $$y = \rho_dW_dy+\rho_oW_oy+\rho_wW_wy+\alpha\iota_N+X_d\beta_d+X_o\beta_o+\gamma g+\epsilon $$
-One example of application is the analysis of movement of populations from housing place to working place. In the litterature of spatial econometrics, the locations at the origins and the locations at destinations coincide.  In our paper, we propose to extend this model to the case where the locations at origin and destinations do not coincide. This can happen in geomarketting applications where the locations of the origins are the customers and the locations at destinations are the spatial coordinates of the shops. 
+One example of application is the analysis of home to work commuting flows. In the spatial econometrics litterature, the origin and destination locations coincide.  In our paper, we propose to extend this model to the case where the locations at origin and destinations do not coincide. This can happen in geomarketing applications where the locations of the origins are the customers and the locations at destinations are the spatial coordinates of the states. 
 
 ## Data storage 
 
-We define by $n_o$ the number of geographical sites at the origin and by $n_d$ the number of geographical sites at destination. We note $Y_{ij}$ the flow which represents a quantity mooving from a geographical site $i$ ($i=i_1,...,i_{n_o}$) towards a geographical site $j$ ($j=j_1...j_{n_d}$). We note $N=n_on_d$. We also note $G_{ij}$ the distance between site $i$ and site $j$. Usually, the geographical sites coincide both at origin and destination which simplify the notation because in that case $i_1=j_1=1$, ..., $i_{n_o}=j_{n_d}=n$. In that particular case, we observe the same charactersitics $x$ both at origin and destination. When the origin and the destination are not the same, this complicates the notation because the variables observed at origin and destination are not the same. Thus, we should note $x$ the variables observed at the origin and $z$ the variables observed at destination. 
+Let $n_o$ be the number of geographical sites at the origin and $n_d$ the number of geographical sites at destination. We denote by $Y_{ij}$ the flow which represents a quantity moving from a geographical site $i$ ($i=i_1,...,i_{n_o}$) towards a geographical site $j$ ($j=j_1...j_{n_d}$). Let $N=n_on_d$. We also denote by $G_{ij}$ the distance between site $i$ and site $j$. Usually, the list of origins and destinations coincide which simplifies the notation because in that case $i_1=j_1=1$, ..., $i_{n_o}=j_{n_d}=n$. In that particular case, we observe the same characteristics $x$ at origin and destination. When the list of origins and destinations are not the same, this complicates the notation because the variables observed at origin and destination may be different. Thus, we should note $x$ the variables observed at the origin and $z$ the variables observed at destination. 
 
 ### Dependent and distance variable
 
-To store the dependent variable and the distances, user has two options:
+To store the dependent variable and the distances, the user has two options:
 
-* Flows and distances are represented into matrices of size $n_o \times n_d$,
+* Flows and distances are stored into matrices of size $n_o \times n_d$,
 
-* Flows and distances are represented into vectors of size $N$.
+* Flows and distances are stored into vectors of size $N$.
 
 ### Explanatory variables 
 
-To store the explanatory variables, user has also two options:
+To store the explanatory variables, the user also has two options:
 
-* Explanatory variables $x$ observed at origin (respectively $z$ at destination) are kept into a data.frame of size $n_o\times R_o$ (resp. $n_d\times R_d$) where $R_o$ (resp. $R_d$) are the number of explanatory variables. 
+* Explanatory variables $x$ observed at origin (respectively $z$ at destination) are stored into a **data.frame** of size $n_o\times R_o$ (resp. $n_d\times R_d$) where $R_o$ (resp. $R_d$) are the respective numbers of explanatory variables. 
 
-* Explanatory variables observed at origin and destination are kept into a data.frame of size $n_on_d\times (R_o + R_d)$. To obtain this form, user has to use a kronecker product applied on $x$ and $z$.  
+* Explanatory variables observed at origin and destination are stored into a **data.frame** of size $n_on_d\times (R_o + R_d)$. To obtain this form, the user has to use a kronecker product applied to $x$ and $z$.  
 
 
 ### Spatial weight matrices
 
-We note $w_o$ (resp. $w_d$) the spatial weight matrix of size $n_o\times n_o$ (resp. $n_d\times n_d$) which determine if two locations at origin (resp. destination) are neighbours.  
+We denote by $OW$ (resp. $DW$) the spatial weight matrix of size $n_o\times n_o$ (resp. $n_d\times n_d$) which determine if two locations at origin (resp. destination) are neighbours.  
 
-To build spatial matrices $W_o$, $W_d$ or $W_w$ of size $N \times N$ user can use the properties of kronecker products by using the spatial weight matrix $w_o$ and $w_d$. He can also use the properties of sparce matrices.  
+To build spatial matrices $W_o$, $W_d$ or $W_w$ of size $N \times N$ the user can use the properties of kronecker products and the spatial weight matrices $OW$ and $DW$. He can also use the properties of sparse matrices.  
 
 
-### Example with simulated data
+### Sparse simulated data example
 
-We will consider two cases: the case where the origin and destination coincide and the case where it does not coincide. 
+We will consider two cases: the case where the list of origins and destinations coincide and the case where it does not coincide. 
 
-#### Origin and destination coincide 
+#### List of origins and destinations coincide 
 
-We consider three examples with different sizes of observations. We used the examples chosen in https://ialab.it.monash.edu/~dwyer/papers/maptrix.pdf. We define the polygons by using the function *create_grid()* inspired by the example given by R. Bivand in https://stat.ethz.ch/pipermail/r-sig-geo/2009-December/007163.html. We observe one explanatory variable on each data set. The programs to obtain these simulated examples are in "simulated_examples.R.
+We consider three examples with different numbers of observations. We use examples from  https://ialab.it.monash.edu/~dwyer/papers/maptrix.pdf. We define the polygons by using the function *create_grid()* inspired by the example given by R. Bivand in https://stat.ethz.ch/pipermail/r-sig-geo/2009-December/007163.html. We consider one explanatory variable for each data set. The programs to obtain these simulated examples are in "simulated_examples.R.
 
 ```{r}
 source("R/simulated_examples.R")
 ```
 
-* The first example is a simplification of the 8 main regions in Australia.
+* The first example is a simplification of the 8 main regions of Australia.
 
 ```{r, echo = F, fig = T}
+#pdf("figures/spdf_au.pdf")
 spplot(spdf_au, "x",
       panel = function(x,y,z,subscripts,...) {
         panel.polygonsplot(x,y,z,subscripts,...)
         sp.text(coordinates(spdf_au), row.names(spdf_au), cex = 0.8)
       } 
 )
+#dev.off()
 ```
 
-* The second example is a simplification of the 16 main regions in Germany.
+* The second example is a simplification of the 16 main regions of Germany.
 
 ```{r, echo = F, fig = T}
+#pdf("figures/spdf_ge.pdf")
 spplot(spdf_ge, "x",
       panel = function(x,y,z,subscripts,...) {
         panel.polygonsplot(x,y,z,subscripts,...)
         sp.text(coordinates(spdf_ge), row.names(spdf_ge), cex = 0.8)
       } 
 )
+#dev.off()
 ```
 
-* The third example is a simplification of the 51 main regions in US:
+* The third example is a simplification of the 51 main regions of the USA:
 
 ```{r, echo = F, fig = T}
+#pdf("figures/spdf_usa.pdf")
 spplot(spdf_usa, "x",
       panel = function(x,y,z,subscripts,...) {
         panel.polygonsplot(x,y,z,subscripts,...)
         sp.text(coordinates(spdf_usa), row.names(spdf_usa), cex = 0.8)
       } 
 )
+#dev.off()
 ```
 
 <!-- * The fourth example is a grid of size $40 \times 25$ i.e. with 1000 regions -->
@@ -123,9 +126,9 @@ spplot(spdf_grid, "x")
 ```
 
 
-##### Transform the explanatory variables to origin-destination 
+##### Storing the explanatory variables into origin-destination format 
 
-If user wants to store the explanatory variables in a matrix of size $N\times R$, he has to use the kronecker product. We present the results for the Australian regions. The same things have been done for Germany and USA: 
+If user wants to store the explanatory variables in a matrix of size $N\times R$, he has to use the kronecker product. We present the results for the Australian regions. Same has been done for Germany and USA: 
 
 ```{r}
 n_au <- nrow(spdf_au)
@@ -164,19 +167,19 @@ flows_grid <- data.frame(origin = rep(row.names(spdf_grid),
 
 ##### Distances between locations
 
-The distances between flows can be presented in a matrix of size $n \times n$.
+The distances between origins and destinations can be stored in a matrix of size $n \times n$.
 
 ```{r}
 G_au <- as.matrix(log(1 + dist(coordinates(spdf_au))))
 ```
 
-It can be also added to the data.frame which presents the data by flow
+It can also be added to the **data.frame** which presents the data in vectorized form.
 
 ```{r}
 flows_au$g <- as.vector(G_au)
 ```
 
-We have done the same things for Germany, USA and the simulated grid.
+Same has been done for Germany, USA and the simulated grid.
 
 ```{r, echo = F}
 G_ge <- as.matrix(log(1 + dist(coordinates(spdf_ge))))
@@ -192,7 +195,7 @@ flows_grid$g <- as.vector(G_grid)
 
 ##### Construct the spatial weight matrices 
 
-To define the spatial weight matrics on the geographical sites, we use the contiguity properties for Australia and Germany. Because some states in USA have no neighbours by using this method, we use the 4 nearest neighbours for USA. All these methods have been implement in Bivand et al. (2013).
+To define the spatial weight matrices for our geographical sites, we use the contiguity properties for Australia and Germany. Because some states in USA have no neighbours when using this method, we use the 4 nearest neighbours method for USA. All these methods have been implemented in package **sp** (Bivand et al., 2013).
 
 ```{r}
 w_au_nb <- poly2nb(spdf_au)
@@ -211,6 +214,7 @@ w_grid <- listw2mat(nb2listw(w_grid_nb))
 We represent the spatial links between the observations:
 
 ```{r, fig = T, fig.width=10, fig.height=6}
+#pdf("figures/spdf_neighbors.pdf", width = 10, height = 5)
 par(mfrow = c(1, 3))
 plot(spdf_au)
 plot(w_au_nb, coordinates(spdf_au), add = T)
@@ -218,9 +222,10 @@ plot(spdf_ge)
 plot(w_ge_nb, coordinates(spdf_ge), add = T)
 plot(spdf_usa)
 plot(w_usa_nb, coordinates(spdf_usa), add = T)
+#dev.off()
 ```
 
-To build the spatial weight matrices $W_o$, $W_d$ and $W_w$, user has to use the Kronecker products. It can be interesting to use the properties of sparse matrix to avoid to store too much data. Fo example we compare the memory needed to store $W_o$ with or without using the sparse properties:
+To build the spatial weight matrices $W_o$, $W_d$ and $W_w$, the user has to use Kronecker products. It can be interesting to use the properties of sparse matrices aw well to avoid to store too much data. For example we compare the memory needed to store $W_o$ with or without using the sparse properties:
 
 ```{r}
 object.size(kronecker(diag(n_au), w_au))
@@ -240,8 +245,7 @@ flows_au$W_dx_d <- as.matrix(W_au_d) %*% flows_au$x_d
 flows_au$W_ox_o <- as.matrix(W_au_o) %*% flows_au$x_o
 ```
 
-
-We have done the same things for Germany and USA.
+Same has been done  for Germany and USA.
 
 ```{r, echo = F}
 W_ge_d <- kronecker(Diagonal(n_ge), w_ge)
@@ -263,11 +267,12 @@ W_grid_o <- kronecker(w_grid, Diagonal(n_grid))
 W_grid_w <- kronecker(as(w_grid, "Matrix"), w_grid)
 ```
 
-#### Origin and destination do not coincide 
+#### List of origins and destinations do not coincide 
 
-We prepare a grid of origins and a grid of destination. The explanatory variables at origin and at destination are not supposed to be the same. 
+We prepare a grid of origins and a grid of destinations. The explanatory variables at origin and at destination are not necessarly the same. 
 
 ```{r, fig = T, fig.width=10, fig.height=5, message = F, warning = F}
+# pdf("figures/grid.pdf", width = 10, height = 6)
 plot(spdf_grid_o, xlim = c(-1, 12), ylim = c(0, 4))
 choroLayer(spdf = spdf_grid_o, var = "x", nclass = 4,
            col = carto.pal(pal1 = "sand.pal", n1 = 4),
@@ -282,11 +287,12 @@ choroLayer(spdf = spdf_grid_d, var = "z", nclass = 4,
            legend.title.txt = "variable z", add = TRUE
 ) 
 text(coordinates(spdf_grid_d), row.names(spdf_grid_d), cex = 0.5)
+# dev.off()
 ```
 
-##### Transform the explanatory variables to origin-destination 
+##### Transform the explanatory variables to origin-destination format 
 
-To store the explanatory variables in a matrix of size $N\times R$, user has to use the kronecker product separetly on origin and on destination. : 
+To store the explanatory variables in a matrix of size $N\times R$, the user has to use Kronecker products separetly for origins and for destinations : 
 
 ```{r}
 n_grid_o <- nrow(sp_grid_o)
@@ -307,7 +313,7 @@ The distances between flows can be presented in a matrix of size $n_d \times n_o
 G_grid <- rgeos::gDistance(sp_grid_o, sp_grid_d, byid = T)
 ```
 
-It can be also added to the data.frame which presents the data by flow
+It can be also added to the data.frame which presents the data in vectorized form
 
 ```{r}
 flows_grid$g <- as.vector(G_grid)
@@ -315,7 +321,7 @@ flows_grid$g <- as.vector(G_grid)
 
 ##### Construct the spatial weight matrices 
 
-To define the spatial weight matrics on the geographical sites, we use the contiguity properties for origin and destination.
+To define the spatial weight matrix on our geographical sites, we use the contiguity properties for origins and destinations.
 
 ```{r}
 w_grid_o_nb <- poly2nb(spdf_grid_o)
@@ -324,7 +330,7 @@ w_grid_d_nb <- poly2nb(spdf_grid_d)
 w_grid_d <- listw2mat(nb2listw(w_grid_d_nb))
 ```
 
-To build the spatial weight matrices $W_o$, $W_d$ and $W_w$, user has to use the Kronecker products. 
+To build the spatial weight matrices $W_o$, $W_d$ and $W_w$, the user has to use Kronecker products. 
 
 ```{r}
 W_grid_d <- kronecker(Diagonal(n_grid_o), w_grid_d)
@@ -379,7 +385,7 @@ Z_au <- cbind(1, flows_au$x_d, flows_au$x_o,
               flows_au$g)
 ```
 
-Flows can be presented in vectorial format. For this, we use the function *DGP_flow_sdm()* which permits to simulate flows data.
+Flows can be presented in vectorized format. For this, we use the function *DGP_flow_sdm()* which allows to simulate flows data.
 
 ```{r}
 source("./R/DGP_flow_sdm.R")
@@ -402,7 +408,7 @@ DGP_flow_sdm(z, delta, rho, W_d, W_o, W_w,
 * **W_o**, **W_d**, **W_w** the spatial weight matrices of size $N\times N$
 * **seed**, an integer value for the seed 
 * **sigma**, the variance of the residuals
-* **message**, print a message to indicate the ratio of signal/noise. 
+* **message**, print a message to indicate the ratio of sd(noise)/sd(signal). 
 
 ```{r}
 flows_au[, c("y_9", "y_8", "y_7", "y_6", "y_5", 
@@ -414,12 +420,12 @@ flows_au[, c("y_9", "y_8", "y_7", "y_6", "y_5",
                seed = 123, sigma = 1, message = T)
 ```
 
-The data set corresponding to the flows is presented in that form :
+The data set corresponding to the vectorized flows is presented in that form :
 
 ```{r}
 head(flows_au)
 ```
-Flows can be also be presented matricially. 
+Flows can be also be presented in matrix format. 
 
 ```{r}
 Y_au_9 <- matrix(flows_au$y_9, n_au, n_au)
@@ -435,7 +441,7 @@ Y_au_0 <- matrix(flows_au$y_0, n_au, n_au)
 ```
 
 
-We have done the same things for Germany, USA and the grid examples.
+Same has been done for Germany, USA and the grid examples.
 
 ```{r}
 Z_ge <- cbind(1, flows_ge$x_d, flows_ge$x_o, 
@@ -521,7 +527,7 @@ Y_grid_0 <- matrix(flows_grid$y_0, n_grid, n_grid)
 
 # Data Vizualization #
 
-## Origin and destination coincide 
+## List of origins and destinations coincide 
 
 ```{r}
 mtq_mob <- getLinkLayer(
@@ -542,9 +548,10 @@ flows_au$y_9_discret <- cut(flows_au$y_9, breaks,
 We plot all the flows.
 
 ```{r}
+# pdf("figures/flows.pdf", width = 6, height = 6)
 par(bg = "grey25", oma = c(0, 0, 0, 0),
     mar = c(0, 0, 0, 0), mai = c(0, 0, 0, 0))
-# plot municipalities
+# plot municipalities 
 plot(spdf_au, col = "grey13", border = "grey25", 
      bg = "grey25", lwd = 0.5)
 # plot graduated links
@@ -567,12 +574,13 @@ layoutLayer(title = "Trades",
             author = paste0("cartography ", packageVersion("cartography")), 
             frame = FALSE, col = "grey25", coltitle = "white",
             tabtitle = TRUE)
+# dev.off()
 ```
 
 
-## Origin and destination do not coincide 
+##  List of origins and destinations do not coincide 
 
-We have first to create a Spatial object containing both origin and destinations spatial units.
+We first have to create a Spatial object containing both origin and destinations spatial units.
 ```{r}
 spdf_grid_o_d <- spRbind(spdf_grid_o[, "NOM"], spdf_grid_d[, "NOM"])
 ```
@@ -593,7 +601,7 @@ flows_grid$y_9_discret <- cut(flows_grid$y_9, breaks,
                             include.lowest = T)
 ```
 
-We plot the biggest flows only.
+We plot the largest flows only.
 
 ```{r}
 par(bg = "grey25", oma = c(0, 0, 0, 0),
@@ -626,24 +634,24 @@ layoutLayer(title = "Trades",
 
 ## Gravity model ##
 
-The form of the gravity model is $Y = \alpha1_{N}+X_o\beta_o+X_d\beta_d+\gamma g + \epsilon$. To fit this model with **R**, we propose two options:
+The form of the classical gravity model is $Y = \alpha1_{N}+X_o\beta_o+X_d\beta_d+\gamma g + \epsilon$. To fit this model with **R**, we propose two options:
 
-* We implement the formulas proposed by LeSage and Pace (2008) which avoid to store the full vectors for the explanatory variables by using the kronecker properties.
+* We implement the formulas proposed by LeSage and Pace (2008) which avoid to store the full vectors for the explanatory variables by using the Kronecker product properties.
 
 * Use the function *lm()* applied to the vectorized form of the data set. 
 
 
 ## LeSage and Pace (2008) estimation ##
 
-LeSage and Pace (2008) show that we can avoid to store the flows data by using the property of the Kroneker product in the space of the regions data. In their paper, they consider the case where $x$ is centered which permits some further simplifications in the resolution of the problem. We call this function *gravity_model()*. It takes as input arguments : 
+LeSage and Pace (2008) show that we can avoid to store the flows data by using the property of the Kroneker product in the space of the regions data. In their paper, they consider the case where $x$ is centered which allows some further simplifications in the resolution of the problem. We call this function *gravity_model()*. It takes as input arguments : 
 
 ```{bash, eval = F}
 gravity_model(x, Y, G, ind_d = NULL, ind_o = NULL) 
 ```
 
-* **x**, a **data.frame** or a matrix with explanatory variable observed on the $n$ geographical sites.
+* **x**, a **data.frame** or a matrix with explanatory variables observed on the $n$ geographical sites.
 * **Y**, the matrix of flows of size $n \times n$,
-* **G**, the matrix of distance of size $n \times n$,
+* **G**, the matrix of distances of size $n \times n$,
 * **ind_d**, the indices of the variables in **x** which will be used at the destination,
 * **ind_o**, the indices of the variables in **x** of the variables used at the origin.
 
@@ -676,7 +684,7 @@ summary(gravity_flows)
 
 **Remark 2:** to compute the estimates with the *lm()* function, the user needs to work with the full matrix of size $N \times 2p$ where $p$ is the number of explanatory variable. 
 
-### Comparison of computationnal times according to the size ###
+### Comparison of computationnal times according to size ###
 
 ```{r, echo = F}
 time_lm_full_au <- system.time(gravity_model(x = as.matrix(spdf_au@data$x), 
@@ -713,19 +721,19 @@ ftrace1(w, method = "exact", miter = 10, riter = 50)
 ```
 
 * *ftrace1()*, which computes the traces of the spatial weight matrices $W$, $W^2$, $W^3$, ..., $W^{miter}$,
-* *fodet1()*, which computes the jacobian matrix in the case of the model (9), i.e. the model with the 3 spatial weight matrices $W_o$, $W_d$, $W_w$
-* *lndetmc()*, which computes the jacobian matrix in the case of a model with only one spatial weight matrix,
+* *fodet1()*, which computes the jacobian matrix in the case of model (9), i.e. the model with the 3 spatial weight matrices $W_o$, $W_d$, $W_w$
+* *lndetmc()*, which computes the jacobian matrix in the case of a model with a single spatial weight matrix,
 * *c_sarf()*, which computes the log likelihood conditionnally to $\rho$.
 
 ### Traces of the spatial weight matrix ###
 
-First we code the function **ftrace1()** which computes the traces of $W$, $W^2$, $W^3$, ..., $W^{miter}$.  The two possible methods are **"exact"** (based on the computation of $W$, $W^2$, $W^3$, ..., $W^{miter}$) or **"approx"** (based on an MCMC approximation, Barry and Pace, 99). The argument **miter** corresponds to the desired maximum order trace and **riter** the maximum number of iterations used to estimate the trace.
+We first code the function **ftrace1()** which computes the traces of $W$, $W^2$, $W^3$, ..., $W^{miter}$.  The two possible methods are **"exact"** (based on the computation of $W$, $W^2$, $W^3$, ..., $W^{miter}$) or **"approx"** (based on an MCMC approximation, Barry and Pace, 99). The argument **miter** corresponds to the desired maximum order trace and **riter** the maximum number of iterations used to estimate the trace.
 
 ```{r, echo = F}
 source("./R/ftrace1.R")
 ```
 
-Example: we compute the traces on the 10 first powers of the spatial weigh matrix. Here we do not use an approximation because the size of the matrix is small
+Example: we compute the traces on the first 10 powers of the spatial weigh matrix. Here we do not use an approximation because the size of the matrix is small
 
 ```{r}
 (traces <- ftrace1(w_au))
