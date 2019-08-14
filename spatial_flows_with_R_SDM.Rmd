@@ -1,7 +1,7 @@
 ---
 title: "Spatial Flows Modelling with **R**"
 author: "T. Laurent, P. Margaretic, C. Thomas-Agnan"
-date: "July 5, 2019"
+date: "August 12, 2019"
 output:
   html_document:
     highlight: tango
@@ -35,9 +35,9 @@ require("maptools")   # spatial
 
 # Data preparation #
 
-LeSage and Pace (2008, equation 20) present the spatial interaction model specification for modelling origin destination flows :
+LeSage and Pace (2008)  present the spatial interaction model specification (eq. 20) for modelling origin destination flows :
 
-$$y = \rho_dW_dy+\rho_oW_oy+\rho_wW_wy+\alpha\iota_N+X_d\beta_d+X_o\beta_o+\gamma g+\epsilon $$
+$$(I_{N\times N}-\rho_dW_dy-\rho_oW_oy-\rho_wW_wy)Y = \alpha \iota_N + X_d\beta_d+X_o\beta_o + XL_d\delta_d + XL_o\delta_o + \gamma G+\epsilon $$
 One example of application is the analysis of home to work commuting flows. In the spatial econometrics litterature, the origin and destination locations coincide.  In our paper, we propose to extend this model to the case where the locations at origin and destinations do not coincide. This can happen in geomarketing applications where the locations of the origins are the customers and the locations at destinations are the spatial coordinates of the states. 
 
 ## Data storage 
@@ -48,7 +48,7 @@ Let $n_o$ be the number of geographical sites at the origin and $n_d$ the number
 
 To store the dependent variable and the distances, the user has two options:
 
-* Flows and distances are stored into matrices of size $n_o \times n_d$,
+* Flows and distances  are stored into matrices of size $n_o \times n_d$,
 
 * Flows and distances are stored into vectors of size $N$.
 
@@ -74,7 +74,7 @@ We will consider two cases: the case where the list of origins and destinations 
 
 #### List of origins and destinations coincide 
 
-We consider three examples with different numbers of observations. We use examples from  https://ialab.it.monash.edu/~dwyer/papers/maptrix.pdf. We define the polygons by using the function *create_grid()* inspired by the example given by R. Bivand in https://stat.ethz.ch/pipermail/r-sig-geo/2009-December/007163.html. We consider one explanatory variable for each data set. The programs to obtain these simulated examples are in "simulated_examples.R.
+We consider three examples with different numbers of observations. We use examples from  https://ialab.it.monash.edu/~dwyer/papers/maptrix.pdf. We define the polygons by using the function *create_grid()* inspired by the example given by R. Bivand in https://stat.ethz.ch/pipermail/r-sig-geo/2009-December/007163.html. We consider one explanatory variable for each data set. The programs to obtain these simulated examples are in "simulated_examples.R. For Australia, we also used real data obtained from the Australian Bureau of Statistics (https://itt.abs.gov.au/itt/r.jsp?databyregion).
 
 ```{r}
 source("R/simulated_examples.R")
@@ -126,19 +126,50 @@ spplot(spdf_grid, "x")
 ```
 
 
-##### Storing the explanatory variables into origin-destination format 
+##### Storing the variables into origin-destination format 
 
-If user wants to store the explanatory variables in a matrix of size $N\times R$, he has to use the kronecker product. We present the results for the Australian regions. Same has been done for Germany and USA: 
+If user wants to store the explanatory variables in a matrix of size $N\times R$, he has to use the kronecker product. We present the results for the Australian regions. First, we create the **origin** and **dest** variables: 
 
 ```{r}
 n_au <- nrow(spdf_au)
 flows_au <- data.frame(origin = rep(row.names(spdf_au), 
                                     each = n_au),
-                         dest = rep(row.names(spdf_au), n_au),
-                       x_o = kronecker(spdf_au$x, rep(1, n_au)),
-                       x_d = kronecker(rep(1, n_au), spdf_au$x))
+                         dest = rep(row.names(spdf_au), n_au))
+```
+
+We create the destination data:
+
+```{r}
+flows_au_d <- sapply(spdf_au@data[, c("x", "wage", "pop", "age",
+                                      "ln_wage", "ln_pop", "ln_age")], 
+                     function (x) kronecker(rep(1, n_au), x))
+colnames(flows_au_d) <- paste0(colnames(flows_au_d), "_d")
+```
+
+We create the origin data:
+
+```{r}
+flows_au_o <- sapply(spdf_au@data[, c("x", "wage", "pop", "age",
+                                      "ln_wage", "ln_pop", "ln_age")], 
+                     function (x) kronecker(x, rep(1, n_au)))
+colnames(flows_au_o) <- paste0(colnames(flows_au_o), "_o")
+```
+
+We merge the data:
+
+```{r}
+flows_au <- cbind(flows_au, flows_au_d, flows_au_o)
 head(flows_au)
 ```
+
+If user wants to store the dependant variable from a matrix of size $n \times n$ to a vector of size $N$, he has to use the function *as.vector()*. He has to take care of the ordering of the observations:
+
+```{r}
+au_flows <- au_flows[id_region_au, id_region_au]
+flows_au$real_Y <- as.vector(au_flows) 
+```
+
+Same has been done for Germany and USA.
 
 ```{r, echo = F}
 n_ge <- nrow(spdf_ge)
@@ -156,14 +187,6 @@ flows_usa <- data.frame(origin = rep(row.names(spdf_usa),
                        x_d = kronecker(rep(1, n_usa), spdf_usa$x))
 ```
 
-```{r, echo = F, eval = F}
-n_grid <- nrow(spdf_grid)
-flows_grid <- data.frame(origin = rep(row.names(spdf_grid), 
-                                    each = n_grid),
-                         dest = rep(row.names(spdf_grid), n_grid),
-                       x_o = kronecker(spdf_grid$x, rep(1, n_grid)),
-                       x_d = kronecker(rep(1, n_grid), spdf_grid$x))
-```
 
 ##### Distances between locations
 
@@ -188,10 +211,6 @@ G_usa <- as.matrix(log(1 + dist(coordinates(spdf_usa))))
 flows_usa$g <- as.vector(G_usa)
 ```
 
-```{r, echo = F, eval =F}
-G_grid <- as.matrix(log(1 + dist(coordinates(spdf_grid))))
-flows_grid$g <- as.vector(G_grid)
-```
 
 ##### Construct the spatial weight matrices 
 
@@ -204,11 +223,6 @@ w_ge_nb <- poly2nb(spdf_ge)
 w_ge <- listw2mat(nb2listw(w_ge_nb))
 w_usa_nb <- knn2nb(knearneigh(coordinates(spdf_usa), k = 4))
 w_usa <- listw2mat(nb2listw(w_usa_nb))
-```
-
-```{r, echo = F, eval = F}
-w_grid_nb <- knn2nb(knearneigh(coordinates(spdf_grid), k = 4))
-w_grid <- listw2mat(nb2listw(w_grid_nb))
 ```
 
 We represent the spatial links between the observations:
@@ -241,8 +255,18 @@ W_au_w <- kronecker(as(w_au, "Matrix"), w_au)
 We prepare the lagged explanatory variables:
 
 ```{r}
-flows_au$W_dx_d <- as.matrix(W_au_d) %*% flows_au$x_d
-flows_au$W_ox_o <- as.matrix(W_au_o) %*% flows_au$x_o
+flows_au$lagged_x_d <- as.matrix(W_au_d) %*% flows_au$x_d
+flows_au[, c("lagged_wage_d", "lagged_pop_d", "lagged_age_d",
+             "lagged_ln_wage_d", "lagged_ln_pop_d", "lagged_ln_age_d")] <- 
+  as.matrix(W_au_d) %*% 
+  as.matrix(flows_au[, c("wage_d", "pop_d", "age_d", 
+                             "ln_wage_d", "ln_pop_d", "ln_age_d")])
+flows_au$lagged_x_o <- as.matrix(W_au_o) %*% flows_au$x_o
+flows_au[, c("lagged_wage_o", "lagged_pop_o", "lagged_age_o",
+             "lagged_ln_wage_o", "lagged_ln_pop_o", "lagged_ln_age_o")] <- 
+  as.matrix(W_au_o) %*% 
+  as.matrix(flows_au[, c("wage_o", "pop_o", "age_o",
+                             "ln_wage_o", "ln_pop_o", "ln_age_o")])
 ```
 
 Same has been done  for Germany and USA.
@@ -251,43 +275,32 @@ Same has been done  for Germany and USA.
 W_ge_d <- kronecker(Diagonal(n_ge), w_ge)
 W_ge_o <- kronecker(w_ge, Diagonal(n_ge))
 W_ge_w <- kronecker(as(w_ge, "Matrix"), w_ge)
-flows_ge$W_dx_d <- as.matrix(W_ge_d) %*% flows_ge$x_d
-flows_ge$W_ox_o <- as.matrix(W_ge_o) %*% flows_ge$x_o
+flows_ge$lagged_x_d <- as.matrix(W_ge_d) %*% flows_ge$x_d
+flows_ge$lagged_x_o <- as.matrix(W_ge_o) %*% flows_ge$x_o
 
 W_usa_d <- kronecker(Diagonal(n_usa), w_usa)
 W_usa_o <- kronecker(w_usa, Diagonal(n_usa))
 W_usa_w <- kronecker(as(w_usa, "Matrix"), w_usa)
-flows_usa$W_dx_d <- as.matrix(W_usa_d) %*% flows_usa$x_d
-flows_usa$W_ox_o <- as.matrix(W_usa_o) %*% flows_usa$x_o
+flows_usa$lagged_x_d <- as.matrix(W_usa_d) %*% flows_usa$x_d
+flows_usa$lagged_x_o <- as.matrix(W_usa_o) %*% flows_usa$x_o
 ```
 
-```{r, echo = F, eval = F}
-W_grid_d <- kronecker(Diagonal(n_grid), w_grid)
-W_grid_o <- kronecker(w_grid, Diagonal(n_grid))
-W_grid_w <- kronecker(as(w_grid, "Matrix"), w_grid)
-```
 
 #### List of origins and destinations do not coincide 
 
-We prepare a grid of origins and a grid of destinations. The explanatory variables at origin and at destination are not necessarly the same. 
+We consider the migration flows from countries of Africa towards countries in Europe. The data are extracted from https://journals.sagepub.com/doi/suppl/10.1177/0022002718823907 
 
-```{r, fig = T, fig.width=10, fig.height=5, message = F, warning = F}
-# pdf("figures/grid.pdf", width = 10, height = 6)
-plot(spdf_grid_o, xlim = c(-1, 12), ylim = c(0, 4))
-choroLayer(spdf = spdf_grid_o, var = "x", nclass = 4,
-           col = carto.pal(pal1 = "sand.pal", n1 = 4),
-           border = "white", lwd = 0.5, legend.pos = "topleft", 
-           legend.title.txt = "variable x", add = TRUE
-) 
-text(coordinates(spdf_grid_o), row.names(spdf_grid_o), cex = 0.5)
-plot(spdf_grid_d, add = T)
-choroLayer(spdf = spdf_grid_d, var = "z", nclass = 4,
-           col = carto.pal(pal1 = "green.pal", n1 = 4),
-           border = "white", lwd = 0.5, legend.pos = "topright", 
-           legend.title.txt = "variable z", add = TRUE
-) 
-text(coordinates(spdf_grid_d), row.names(spdf_grid_d), cex = 0.5)
-# dev.off()
+To load the data:
+```{r}
+source("./R/migration_data.R")
+```
+
+
+```{r, fig = T, fig.width=5, fig.height=8, message = F, warning = F}
+pdf("figures/grid.pdf", width = 7, height = 8)
+plot(st_geometry(europe), xlim = c(-40, 60), ylim = c(-40, 70))
+plot(st_geometry(africa), add = T)
+dev.off()
 ```
 
 ##### Transform the explanatory variables to origin-destination format 
@@ -295,14 +308,22 @@ text(coordinates(spdf_grid_d), row.names(spdf_grid_d), cex = 0.5)
 To store the explanatory variables in a matrix of size $N\times R$, the user has to use Kronecker products separetly for origins and for destinations : 
 
 ```{r}
-n_grid_o <- nrow(sp_grid_o)
-n_grid_d <- nrow(sp_grid_d)
-flows_grid <- data.frame(origin = rep(row.names(sp_grid_o), 
-                                    each = n_grid_d),
-                         dest = rep(row.names(sp_grid_d), n_grid_o),
-                       x_o = kronecker(sp_grid_o$x, rep(1, n_grid_d)),
-                       z_d = kronecker(rep(1, n_grid_o), sp_grid_d$z))
-head(flows_grid)
+n_mig_o <- nrow(africa)
+n_mig_d <- nrow(europe)
+x_mig_origin <- kronecker(as.matrix(africa %>% 
+                  dplyr::select(popul_o, gdp_o, civilconflict_o)  %>%
+                  st_drop_geometry()), rep(1, n_mig_d))
+colnames(x_mig_origin) <- c("popul_o", "gdp_o", "civilconflict_o")
+x_mig_dest <- kronecker(rep(1, n_mig_o), as.matrix(europe %>% 
+                  dplyr::select(popul_d, gdp_d)  %>%
+                  st_drop_geometry()))
+colnames(x_mig_dest) <- c("popul_d", "gdp_d")
+flows_mig <- data.frame(origin = rep(africa$NOM, 
+                                    each = n_mig_d),
+                         dest = rep(europe$NOM, n_mig_o),
+                         x_mig_origin,
+                        x_mig_dest)
+head(flows_mig)
 ```
 
 ##### Distances between locations
@@ -310,43 +331,101 @@ head(flows_grid)
 The distances between flows can be presented in a matrix of size $n_d \times n_o$. We use the function *gDistance()* from package **rgeos** (Bivand and Rundel, 2019). 
 
 ```{r}
-G_grid <- rgeos::gDistance(sp_grid_o, sp_grid_d, byid = T)
+G_mig <- st_distance(st_centroid(africa), 
+                      st_centroid(europe))
 ```
 
 It can be also added to the data.frame which presents the data in vectorized form
 
 ```{r}
-flows_grid$g <- as.vector(G_grid)
+flows_mig$g <- as.vector(t(G_mig))
+```
+
+We also add the dependent variable 
+
+```{r}
+flows_mig$y <- as.vector(Y_mig)
 ```
 
 ##### Construct the spatial weight matrices 
 
-To define the spatial weight matrix on our geographical sites, we use the contiguity properties for origins and destinations.
+To define the spatial weight matrix on our geographical sites, we use the 4-nearest neighbours properties for origins and destinations.
 
 ```{r}
-w_grid_o_nb <- poly2nb(spdf_grid_o)
-w_grid_o <- listw2mat(nb2listw(w_grid_o_nb))
-w_grid_d_nb <- poly2nb(spdf_grid_d)
-w_grid_d <- listw2mat(nb2listw(w_grid_d_nb))
+w_mig_o_nb <- knn2nb(knearneigh(as(st_centroid(africa), "Spatial"), k = 4))
+w_mig_o <- listw2mat(nb2listw(w_mig_o_nb))
+w_mig_d_nb <- knn2nb(knearneigh(as(st_centroid(europe), "Spatial"), k = 4))
+w_mig_d <- listw2mat(nb2listw(w_mig_d_nb))
 ```
 
 To build the spatial weight matrices $W_o$, $W_d$ and $W_w$, the user has to use Kronecker products. 
 
 ```{r}
-W_grid_d <- kronecker(Diagonal(n_grid_o), w_grid_d)
-W_grid_o <- kronecker(w_grid_o, Diagonal(n_grid_d))
-W_grid_w <- W_grid_o %*% W_grid_d
+W_mig_d <- kronecker(Diagonal(n_mig_o), w_mig_d)
+W_mig_o <- kronecker(w_mig_o, Diagonal(n_mig_d))
+W_mig_w <- W_mig_o %*% W_mig_d
 ```
 
 We prepare the lagged explanatory variables:
 
 ```{r}
-flows_grid$W_dz_d <- as.matrix(W_grid_d) %*% flows_grid$z_d
-flows_grid$W_ox_o <- as.matrix(W_grid_o) %*% flows_grid$x_o
+flows_mig[, c("lagged_popul_d", "lagged_gdp_d")] <- 
+  as.matrix(W_mig_d) %*% as.matrix(flows_mig[, c("popul_d", "gdp_d")])
+flows_mig[, c("lagged_popul_o", "lagged_gdp_o", "lagged_civilconflict_o")] <- 
+  as.matrix(W_mig_d) %*% as.matrix(flows_mig[, c("popul_o", "gdp_o",
+                                                 "civilconflict_o")])
 ```
 
 
 ### DGP of the $Y$ variables ###
+
+#### Intraregional modelling 
+
+Laurent, Margaretic and Thomas-Agnan (2019) proposes the spatial interaction model specification for modelling origin destination flows :
+
+$$(I_{N\times N}-\rho_dW_dy-\rho_oW_oy-\rho_wW_wy)Y = \iota_N\alpha + vec(I_n)\alpha_i + X_d\beta_d+X_o\beta_o+X_i\beta_i + XL_d\delta_d + XL_o\delta_o + \gamma G+\epsilon $$
+
+The previously described procedure aims at allowing the coefficients associated with
+the matrices $X_d$, $X_o$ to more accurately reflect the variation in interregional flows, and those associated with the matrix $X_i$ to capture intraregional variation in flows.
+
+Same has been done for Germany and USA.
+
+```{r}
+flows_au_od <- flows_au
+flows_au$vec_In <- as.vector(diag(n_au))
+
+for (var in c("x", "wage", "pop", "age", 
+              "lagged_x", "lagged_wage", "lagged_pop", "lagged_age",
+              "ln_wage", "ln_pop", "ln_age", 
+              "lagged_ln_wage", "lagged_ln_pop", "lagged_ln_age")) {
+  flows_au[, paste0(var, "_i")] <- flows_au[, paste0(var, "_o")]
+  flows_au[flows_au$origin != flows_au$dest, paste0(var, "_i")] <- 0
+  flows_au[flows_au$origin == flows_au$dest, paste0(var, "_o")] <- 0
+  flows_au[flows_au$origin == flows_au$dest, paste0(var, "_d")] <- 0
+}
+```
+
+
+```{r, echo = F}
+flows_ge_od <- flows_ge
+flows_ge$vec_In <- as.vector(diag(n_ge))
+flows_usa_od <- flows_usa
+flows_usa$vec_In <- as.vector(diag(n_usa))
+
+for (var in c("x", "lagged_x")) {
+  flows_ge[, paste0(var, "_i")] <- flows_ge[, paste0(var, "_o")]
+  flows_ge[flows_ge$origin != flows_ge$dest, paste0(var, "_i")] <- 0
+  flows_ge[flows_ge$origin == flows_ge$dest, paste0(var, "_o")] <- 0
+  flows_ge[flows_ge$origin == flows_ge$dest, paste0(var, "_d")] <- 0
+  
+  flows_usa[, paste0(var, "_i")] <- flows_usa[, paste0(var, "_o")]
+  flows_usa[flows_usa$origin != flows_usa$dest, paste0(var, "_i")] <- 0
+  flows_usa[flows_usa$origin == flows_usa$dest, paste0(var, "_o")] <- 0
+  flows_usa[flows_usa$origin == flows_usa$dest, paste0(var, "_d")] <- 0
+}
+```
+
+
 
 We simulate 9 different SDM interaction models: 
 
@@ -368,21 +447,27 @@ $y_2 = (I_{N}-\rho_dW_d)^{-1}(Z\delta + \epsilon)$,
 
 $y_1 = (Z\delta + \epsilon)$,
 
-$y_o = (Z\delta_{gravity} + \epsilon)$,
-
-with $Z=(1_{N}, X_d, X_o, W_dX_d, W_oX_o, g)$, $\delta = (\alpha, \beta_d, \beta_o, \delta_d, \delta_o, \gamma)$ and $\delta_{gravity} = (\alpha, \beta_d, \beta_o, 0, 0, \gamma)$. We generate a set of flows $Y$ with $\alpha = 0$, $\beta_d = 1$, $\beta_o = 0.5$, $\delta_d = 0.5$, $\delta_o = 0.25$, $\gamma = -2.0$, $\rho_d = 0.4$, $\rho_o = 0.4$, and $\rho_w = -0.16$.
-
+with $Z=(1_{N}, vec(I_n), X_d, X_o, X_i, lagged(X_d), lagged(X_o), lagged(X_i), G)$, $\delta = (\alpha, \beta_d, \beta_o, \beta_i, \delta_d, \delta_o,  \delta_i, \gamma)$. We generate a set of flows $Y$ with $\alpha = 1$, $\alpha_i = 0.5$, $\beta_d = 1$, $\beta_o = 0.5$, $\beta_i=2$, $\delta_d = 0.25$, $\delta_o = 0.1$, $\delta_i = 0.5$, $\gamma = -2.0$, $\rho_d = 0.4$, $\rho_o = 0.4$, and $\rho_w = -0.16$.
 
 ```{r}
-delta <- c(0, 1, 0.5, 0.5, 0.25, -2)
+delta <- c(2, 1.5, 1, 0.5, 2.5, 0.25, 0.1, 0.5, -2)
 rho <- c(0.4, 0.4, -0.16)
 ```
 
+We consider one simulation for the model for the case "intra":
 ```{r}
-Z_au <- cbind(1, flows_au$x_d, flows_au$x_o, 
-              as.matrix(W_au_d) %*% flows_au$x_d, 
-              as.matrix(W_au_o) %*% flows_au$x_o, 
+Z_au <- cbind(1, flows_au$vec_In, 
+              flows_au$x_d, flows_au$x_o, flows_au$x_i,
+              flows_au$lagged_x_d, flows_au$lagged_x_o, flows_au$lagged_x_i,
               flows_au$g)
+```
+
+We consider another simulation for the model for the case without "intra". Because the origin and destination are different in the intra case, we have to consider antother matrix:
+
+```{r}
+Z_au_od <- cbind(1, flows_au_od$x_d, flows_au_od$x_o, 
+              flows_au_od$lagged_x_d, flows_au_od$lagged_x_o,
+              flows_au_od$g)
 ```
 
 Flows can be presented in vectorized format. For this, we use the function *DGP_flow_sdm()* which allows to simulate flows data.
@@ -406,18 +491,67 @@ DGP_flow_sdm(z, delta, rho, W_d, W_o, W_w,
 * **delta**, the vector of parameters,
 * **rho**, the vector with $(\rho_d,\rho_o,\rho_w)$
 * **W_o**, **W_d**, **W_w** the spatial weight matrices of size $N\times N$
-* **seed**, an integer value for the seed 
+* **seed**, a vector of integer values for the seed. NULL by default 
 * **sigma**, the variance of the residuals
 * **message**, print a message to indicate the ratio of sd(noise)/sd(signal). 
+* **model**, a character. 
 
 ```{r}
-flows_au[, c("y_9", "y_8", "y_7", "y_6", "y_5", 
-             "y_4", "y_3", "y_2", "y_1", "y_0")] <- 
-  DGP_flow_sdm(z = Z_au, delta = delta, rho = rho, 
+flows_au[, "y_9"] <- DGP_flow_sdm(z = Z_au, delta = delta,  rho = rho,
                W_d = as.matrix(W_au_d), 
                W_o = as.matrix(W_au_o), 
                W_w = as.matrix(W_au_w), 
-               seed = 123, sigma = 1, message = T)
+               seed = 123, sigma = 1, message = T,
+               model = "model_9")
+
+flows_au[, "y_8"] <- DGP_flow_sdm(z = Z_au, delta = delta,  rho = rho[1:2],
+               W_d = as.matrix(W_au_d), 
+               W_o = as.matrix(W_au_o), 
+               W_w = as.matrix(W_au_w), 
+               seed = 123, sigma = 1, message = T,
+               model = "model_8")
+
+flows_au[, "y_7"] <- DGP_flow_sdm(z = Z_au, delta = delta,  rho = rho[1:2],
+               W_d = as.matrix(W_au_d), 
+               W_o = as.matrix(W_au_o), 
+               seed = 123, sigma = 1, message = T,
+               model = "model_7")
+
+flows_au[, "y_6"] <- DGP_flow_sdm(z = Z_au, delta = delta,  rho = rho[1],
+               W_d = as.matrix(W_au_d), 
+               W_o = as.matrix(W_au_o),
+               W_w = as.matrix(W_au_w), 
+               seed = 123, sigma = 1, message = T,
+               model = "model_6")
+
+flows_au[, "y_5"] <- DGP_flow_sdm(z = Z_au, delta = delta,  rho = rho[1],
+               W_d = as.matrix(W_au_d), 
+               W_o = as.matrix(W_au_o),
+               seed = 123, sigma = 1, message = T,
+               model = "model_5")
+
+flows_au[, "y_4"] <- DGP_flow_sdm(z = Z_au, delta = delta,  rho = rho[1],
+               W_w = as.matrix(W_au_w), 
+               seed = 123, sigma = 1, message = T,
+               model = "model_4")
+
+flows_au[, "y_3"] <- DGP_flow_sdm(z = Z_au, delta = delta,  rho = rho[1],
+               W_o = as.matrix(W_au_o), 
+               seed = 123, sigma = 1, message = T,
+               model = "model_3")
+
+flows_au[, "y_2"] <- DGP_flow_sdm(z = Z_au, delta = delta,  rho = rho[1],
+               W_d = as.matrix(W_au_d), 
+               seed = 123, sigma = 1, message = T,
+               model = "model_2")
+
+flows_au[, "y_1"] <- DGP_flow_sdm(z = Z_au, delta = delta,
+               seed = 123, sigma = 1, message = T,
+               model = "model_1")
+
+flows_au_od[, "y_1"] <- DGP_flow_sdm(z = Z_au_od, delta = delta[-c(2, 5, 8)],
+               seed = 123, sigma = 1, message = T,
+               model = "model_1")
 ```
 
 The data set corresponding to the vectorized flows is presented in that form :
@@ -437,24 +571,77 @@ Y_au_4 <- matrix(flows_au$y_4, n_au, n_au)
 Y_au_3 <- matrix(flows_au$y_3, n_au, n_au)
 Y_au_2 <- matrix(flows_au$y_2, n_au, n_au)
 Y_au_1 <- matrix(flows_au$y_1, n_au, n_au)
-Y_au_0 <- matrix(flows_au$y_0, n_au, n_au)
+Y_au_od_1 <- matrix(flows_au_od$y_1, n_au, n_au)
 ```
 
 
 Same has been done for Germany, USA and the grid examples.
 
-```{r}
-Z_ge <- cbind(1, flows_ge$x_d, flows_ge$x_o, 
-              as.matrix(W_ge_d) %*% flows_ge$x_d, 
-              as.matrix(W_ge_o) %*% flows_ge$x_o, 
+```{r, echo = F}
+Z_ge <- cbind(1, flows_ge$vec_In, 
+              flows_ge$x_d, flows_ge$x_o, flows_ge$x_i,
+              flows_ge$lagged_x_d, flows_ge$lagged_x_o, flows_ge$lagged_x_i,
               flows_ge$g)
-flows_ge[, c("y_9", "y_8", "y_7", "y_6", "y_5", 
-             "y_4", "y_3", "y_2", "y_1", "y_0")] <- 
-  DGP_flow_sdm(z = Z_ge, delta = delta, rho = rho, 
+
+Z_ge_od <- cbind(1, flows_ge_od$x_d, flows_ge_od$x_o, 
+              flows_ge_od$lagged_x_d, flows_ge_od$lagged_x_o, 
+              flows_ge_od$g)
+
+flows_ge[, "y_9"] <- DGP_flow_sdm(z = Z_ge, delta = delta,  rho = rho,
                W_d = as.matrix(W_ge_d), 
                W_o = as.matrix(W_ge_o), 
                W_w = as.matrix(W_ge_w), 
-               seed = 1234, sigma = 1, message = T)
+               seed = 123, sigma = 1, message = F,
+               model = "model_9")
+
+flows_ge[, "y_8"] <- DGP_flow_sdm(z = Z_ge, delta = delta,  rho = rho[1:2],
+               W_d = as.matrix(W_ge_d), 
+               W_o = as.matrix(W_ge_o), 
+               W_w = as.matrix(W_ge_w), 
+               seed = 123, sigma = 1, message = F,
+               model = "model_8")
+
+flows_ge[, "y_7"] <- DGP_flow_sdm(z = Z_ge, delta = delta,  rho = rho[1:2],
+               W_d = as.matrix(W_ge_d), 
+               W_o = as.matrix(W_ge_o), 
+               seed = 123, sigma = 1, message = F,
+               model = "model_7")
+
+flows_ge[, "y_6"] <- DGP_flow_sdm(z = Z_ge, delta = delta,  rho = rho[1],
+               W_d = as.matrix(W_ge_d), 
+               W_o = as.matrix(W_ge_o),
+               W_w = as.matrix(W_ge_w), 
+               seed = 123, sigma = 1, message = F,
+               model = "model_6")
+
+flows_ge[, "y_5"] <- DGP_flow_sdm(z = Z_ge, delta = delta,  rho = rho[1],
+               W_d = as.matrix(W_ge_d), 
+               W_o = as.matrix(W_ge_o),
+               seed = 123, sigma = 1, message = F,
+               model = "model_5")
+
+flows_ge[, "y_4"] <- DGP_flow_sdm(z = Z_ge, delta = delta,  rho = rho[1],
+               W_w = as.matrix(W_ge_w), 
+               seed = 123, sigma = 1, message = F,
+               model = "model_4")
+
+flows_ge[, "y_3"] <- DGP_flow_sdm(z = Z_ge, delta = delta,  rho = rho[1],
+               W_o = as.matrix(W_ge_o), 
+               seed = 123, sigma = 1, message = F,
+               model = "model_3")
+
+flows_ge[, "y_2"] <- DGP_flow_sdm(z = Z_ge, delta = delta,  rho = rho[1],
+               W_d = as.matrix(W_ge_d), 
+               seed = 123, sigma = 1, message = F,
+               model = "model_2")
+
+flows_ge[, "y_1"] <- DGP_flow_sdm(z = Z_ge, delta = delta,
+               seed = 123, sigma = 1, message = F,
+               model = "model_1")
+
+flows_ge_od[, "y_1"] <- DGP_flow_sdm(z = Z_ge_od, delta = delta[-c(2, 5, 8)],
+               seed = 123, sigma = 1, message = F,
+               model = "model_1")
 ```
 
 ```{r, echo = F}
@@ -467,21 +654,75 @@ Y_ge_4 <- matrix(flows_ge$y_4, n_ge, n_ge)
 Y_ge_3 <- matrix(flows_ge$y_3, n_ge, n_ge)
 Y_ge_2 <- matrix(flows_ge$y_2, n_ge, n_ge)
 Y_ge_1 <- matrix(flows_ge$y_1, n_ge, n_ge)
-Y_ge_0 <- matrix(flows_ge$y_0, n_ge, n_ge)
+Y_ge_od_1 <- matrix(flows_ge_od$y_1, n_ge, n_ge)
 ```
 
 ```{r}
-Z_usa <- cbind(1, flows_usa$x_d, flows_usa$x_o, 
-              as.matrix(W_usa_d) %*% flows_usa$x_d, 
-              as.matrix(W_usa_o) %*% flows_usa$x_o, 
+Z_usa <- cbind(1, flows_ge$vec_In, 
+               flows_usa$x_d, flows_usa$x_o, flows_usa$x_i, 
+              flows_usa$lagged_x_d, flows_usa$lagged_x_o, flows_usa$lagged_x_i, 
               flows_usa$g)
-flows_usa[, c("y_9", "y_8", "y_7", "y_6", "y_5", 
-             "y_4", "y_3", "y_2", "y_1", "y_0")] <- 
-  DGP_flow_sdm(z = Z_usa, delta = delta, rho = rho, 
+
+Z_usa_od <- cbind(1, flows_usa_od$x_d, flows_usa_od$x_o, flows_usa_od$x_i, 
+              flows_usa_od$lagged_x_d, flows_usa_od$lagged_x_o, flows_usa_od$lagged_x_i, 
+              flows_usa_od$g)
+
+
+flows_usa[, "y_9"] <- DGP_flow_sdm(z = Z_usa, delta = delta,  rho = rho,
                W_d = as.matrix(W_usa_d), 
                W_o = as.matrix(W_usa_o), 
                W_w = as.matrix(W_usa_w), 
-               seed = 1234, sigma = 1, message = T)
+               seed = 123, sigma = 1, message = F,
+               model = "model_9")
+
+flows_usa[, "y_8"] <- DGP_flow_sdm(z = Z_usa, delta = delta,  rho = rho[1:2],
+               W_d = as.matrix(W_usa_d), 
+               W_o = as.matrix(W_usa_o), 
+               W_w = as.matrix(W_usa_w), 
+               seed = 123, sigma = 1, message = F,
+               model = "model_8")
+
+flows_usa[, "y_7"] <- DGP_flow_sdm(z = Z_usa, delta = delta,  rho = rho[1:2],
+               W_d = as.matrix(W_usa_d), 
+               W_o = as.matrix(W_usa_o), 
+               seed = 123, sigma = 1, message = F,
+               model = "model_7")
+
+flows_usa[, "y_6"] <- DGP_flow_sdm(z = Z_usa, delta = delta,  rho = rho[1],
+               W_d = as.matrix(W_usa_d), 
+               W_o = as.matrix(W_usa_o),
+               W_w = as.matrix(W_usa_w), 
+               seed = 123, sigma = 1, message = F,
+               model = "model_6")
+
+flows_usa[, "y_5"] <- DGP_flow_sdm(z = Z_usa, delta = delta,  rho = rho[1],
+               W_d = as.matrix(W_usa_d), 
+               W_o = as.matrix(W_usa_o),
+               seed = 123, sigma = 1, message = F,
+               model = "model_5")
+
+flows_usa[, "y_4"] <- DGP_flow_sdm(z = Z_usa, delta = delta,  rho = rho[1],
+               W_w = as.matrix(W_usa_w), 
+               seed = 123, sigma = 1, message = F,
+               model = "model_4")
+
+flows_usa[, "y_3"] <- DGP_flow_sdm(z = Z_usa, delta = delta,  rho = rho[1],
+               W_o = as.matrix(W_usa_o), 
+               seed = 123, sigma = 1, message = F,
+               model = "model_3")
+
+flows_usa[, "y_2"] <- DGP_flow_sdm(z = Z_usa, delta = delta,  rho = rho[1],
+               W_d = as.matrix(W_usa_d), 
+               seed = 123, sigma = 1, message = F,
+               model = "model_2")
+
+flows_usa[, "y_1"] <- DGP_flow_sdm(z = Z_usa, delta = delta,
+               seed = 123, sigma = 1, message = F,
+               model = "model_1")
+
+flows_usa_od[, "y_1"] <- DGP_flow_sdm(z = Z_usa_od, delta = delta[-c(2, 5, 8)],
+               seed = 123, sigma = 1, message = F,
+               model = "model_1")
 ```
 
 ```{r, echo = F}
@@ -494,36 +735,10 @@ Y_usa_4 <- matrix(flows_usa$y_4, n_usa, n_usa)
 Y_usa_3 <- matrix(flows_usa$y_3, n_usa, n_usa)
 Y_usa_2 <- matrix(flows_usa$y_2, n_usa, n_usa)
 Y_usa_1 <- matrix(flows_usa$y_1, n_usa, n_usa)
-Y_usa_0 <- matrix(flows_usa$y_0, n_usa, n_usa)
+Y_usa_od_1 <- matrix(flows_usa_od$y_1, n_usa, n_usa)
 ```
 
 
-```{r}
-Z_grid <- cbind(1, flows_grid$z_d, flows_grid$x_o, 
-              as.numeric(W_grid_d %*% as(flows_grid$z_d, "sparseVector")), 
-              as.numeric(W_grid_o %*% as(flows_grid$x_o, "sparseVector")), 
-              flows_grid$g)
-flows_grid[, c("y_9", "y_8", "y_7", "y_6", "y_5", 
-             "y_4", "y_3", "y_2", "y_1", "y_0")] <- 
-  DGP_flow_sdm(z = Z_grid, delta = delta, rho = rho, 
-               W_d = W_grid_d, 
-               W_o = W_grid_o, 
-               W_w = W_grid_w, 
-               seed = 123, sigma = 1, message = T)
-```
-
-```{r, echo = F, eval = F}
-Y_grid_9 <- matrix(flows_grid$y_9, n_grid, n_grid)
-Y_grid_8 <- matrix(flows_grid$y_8, n_grid, n_grid)
-Y_grid_7 <- matrix(flows_grid$y_7, n_grid, n_grid)
-Y_grid_6 <- matrix(flows_grid$y_6, n_grid, n_grid)
-Y_grid_5 <- matrix(flows_grid$y_5, n_grid, n_grid)
-Y_grid_4 <- matrix(flows_grid$y_4, n_grid, n_grid)
-Y_grid_3 <- matrix(flows_grid$y_3, n_grid, n_grid)
-Y_grid_2 <- matrix(flows_grid$y_2, n_grid, n_grid)
-Y_grid_1 <- matrix(flows_grid$y_1, n_grid, n_grid)
-Y_grid_0 <- matrix(flows_grid$y_0, n_grid, n_grid)
-```
 
 # Data Vizualization #
 
@@ -538,10 +753,10 @@ mtq_mob <- getLinkLayer(
 )
 ```
 
-We discretize the variable $y_9$:
+We discretize the variable *real_Y*:
 ```{r}
-breaks <- quantile(flows_au$y_9)
-flows_au$y_9_discret <- cut(flows_au$y_9, breaks,
+breaks <- quantile(flows_au$real_Y)
+flows_au$real_Y_discret <- cut(flows_au$real_Y, breaks,
                             include.lowest = T)
 ```
 
@@ -560,10 +775,10 @@ gradLinkTypoLayer(
   xid = c("origin","dest"),
   df = flows_au, 
   dfid = c("origin","dest"),
-  var = "y_9", 
+  var = "real_Y", 
   breaks = breaks,
   lwd = c(1, 4, 8, 16),
-  var2 = "y_9_discret", 
+  var2 = "real_Y_discret", 
   legend.var.pos = "left",
   legend.var.title.txt = "Nb. of\nTrade",
 ) 
@@ -582,21 +797,23 @@ layoutLayer(title = "Trades",
 
 We first have to create a Spatial object containing both origin and destinations spatial units.
 ```{r}
-spdf_grid_o_d <- spRbind(spdf_grid_o[, "NOM"], spdf_grid_d[, "NOM"])
+sf_mig_o_d <- rbind(africa[, "NOM"], 
+                    europe[, "NOM"])
 ```
 
 ```{r}
 mtq_mob <- getLinkLayer(
-  x = spdf_grid_o_d, 
+  x = sf_mig_o_d, 
   xid = "NOM", 
-  df = flows_grid, 
+  df = flows_mig, 
   dfid = c("origin","dest")
 )
 ```
 
 We discretize the variable $y_9$:
 ```{r}
-breaks <- quantile(flows_grid$y_9, c(0, 0.9, 0.925, 0.95, 0.975, 1))
+breaks <- quantile(flows_mig$y_9, 
+                   c(0, 0.9, 0.925, 0.95, 0.975, 1))
 flows_grid$y_9_discret <- cut(flows_grid$y_9, breaks,
                             include.lowest = T)
 ```
@@ -657,7 +874,7 @@ gravity_model(x, Y, G, ind_d = NULL, ind_o = NULL)
 
 
 ```{r, echo = T}
-source("./R/gravity_model.R")
+source("./R/gravity_model_2.R")
 ```
 
 ## Applications ##
@@ -665,13 +882,16 @@ source("./R/gravity_model.R")
 ### With the Australian simulated data ###
 
 ```{r}
-gravity_model(x = as.matrix(spdf_au@data$x), Y = Y_au_0, G = G_au)
+gravity_model(x = as.matrix(spdf_au@data$x), Y = Y_au_od_1, 
+              G = G_au, lagged = T, centered = T, w = w_au,
+              intra_x = F)
 ```
 
 We compare the results with the ones obtained with the function *lm()* :
 
 ```{r}
-gravity_flows <- lm(y_0 ~ x_d + x_o + g, data = flows_au)
+gravity_flows <- lm(y_1 ~ x_d + lagged_x_d + x_o + lagged_x_o + g, 
+                    data = flows_au_od)
 ```
 
 The function *summary()* gives also the standard errors of the estimated coefficients and the results of the t-test. It also gives the values of the $R^2$. 
@@ -684,24 +904,105 @@ summary(gravity_flows)
 
 **Remark 2:** to compute the estimates with the *lm()* function, the user needs to work with the full matrix of size $N \times 2p$ where $p$ is the number of explanatory variable. 
 
-### Comparison of computationnal times according to size ###
+### With the Australian simulated data with intra effect ###
 
-```{r, echo = F}
-time_lm_full_au <- system.time(gravity_model(x = as.matrix(spdf_au@data$x), 
-                                             Y = Y_au_0, G = G_au))
-time_lm_full_ge <- system.time(gravity_model(x = as.matrix(spdf_ge@data$x), 
-                                             Y = Y_ge_0, G = G_ge))
-time_lm_full_usa <- system.time(gravity_model(x = as.matrix(spdf_usa@data$x), 
-                                             Y = Y_usa_0, G = G_usa))
-time_lm_vect_au <- system.time(lm(y_0 ~ x_d + x_o + g, data = flows_au))
-time_lm_vect_ge <- system.time(lm(y_0 ~ x_d + x_o + g, data = flows_ge))
-time_lm_vect_usa <- system.time(lm(y_0 ~ x_d + x_o + g, data = flows_usa))
-(time_gravity <- data.frame(matrix = c(time_lm_full_au[3], time_lm_full_ge[3], 
-                                      time_lm_full_usa[3]),
-                           vector = c(time_lm_vect_au[3], time_lm_vect_ge[3],
-                                      time_lm_vect_usa[3]),
-                           row.names = c("au", "ge", "usa")))  
+```{r}
+gravity_model(x = as.matrix(spdf_au@data$x), Y = Y_au_1, 
+              G = G_au, lagged = T, centered = F, w = w_au,
+                intra_x = T)
 ```
+
+We compare the results with the ones obtained with the function *lm()* :
+
+```{r}
+gravity_flows <- lm(y_1 ~ vec_In + x_d + x_o + x_i + 
+                      lagged_x_d + lagged_x_o + lagged_x_i + g, 
+                    data = flows_au)
+summary(gravity_flows)
+```
+
+### With the Australian real data ###
+
+```{r}
+gravity_model(x = log(as.matrix(spdf_au@data[, 
+                      c("wage", "pop", "age")])), 
+              Y = log(au_flows), ind_d = c(2, 3), 
+              ind_o = c(1, 2), 
+              G = G_au, lagged = T, centered = F, w = w_au,
+              intra_x = F)
+```
+
+We compare the results with the ones obtained with the function *lm()* :
+
+```{r}
+gravity_real_flows <- lm(log(real_Y) ~ log(pop_d) + log(age_d) + 
+                          lagged_ln_pop_d + lagged_ln_age_d + 
+                           log(wage_o) + log(pop_o) +
+                           lagged_ln_wage_o + lagged_ln_pop_o + g, 
+                         data = flows_au_od)
+summary(gravity_real_flows)
+```
+
+Intraregionnal model:
+```{r}
+gravity_model(x = log(as.matrix(spdf_au@data[, 
+                      c("wage", "pop")])), 
+              Y = log(au_flows), G = G_au, lagged = T, w = w_au,
+              intra_x = T)
+```
+
+We compare the results with the ones obtained with the function *lm()* :
+
+```{r}
+gravity_real_flows <- lm(log(real_Y) ~ vec_In + 
+                           ln_wage_d + ln_pop_d  + 
+                           lagged_ln_wage_d + lagged_ln_pop_d  +
+                           ln_wage_o + ln_pop_o + 
+                           lagged_ln_wage_o + lagged_ln_pop_o +
+                           ln_wage_i + ln_pop_i + 
+                           lagged_ln_wage_i + lagged_ln_pop_i + g, 
+                         data = flows_au)
+summary(gravity_real_flows)
+```
+
+
+Computational time test : 
+
+
+
+
+### Comparison of computationnal ###
+
+```{r}
+microbenchmark::microbenchmark(
+  # australia
+  gravity_model(x = as.matrix(spdf_au@data$x), 
+                  Y = Y_au_od_1, G = G_au, centered = T),
+  gravity_model(x = as.matrix(spdf_au@data$x), 
+                  Y = Y_au_od_1, G = G_au),
+  lm(y_1 ~ x_d + x_o + g, data = flows_au_od),
+  gravity_model(x = as.matrix(spdf_au@data$x), 
+                  Y = Y_au_1, G = G_au, intra_x = T),
+  # germany
+  gravity_model(x = as.matrix(spdf_ge@data$x), 
+                   Y = Y_ge_od_1, G = G_ge, centered = T),
+  gravity_model(x = as.matrix(spdf_ge@data$x), 
+                   Y = Y_ge_od_1, G = G_ge),
+  lm(y_1 ~ x_d + x_o + g, data = flows_ge),
+  gravity_model(x = as.matrix(spdf_ge@data$x), 
+                   Y = Y_ge_od_1, G = G_ge, intra_x = T),
+  # usa
+  gravity_model(x = as.matrix(spdf_usa@data$x), 
+                Y = Y_usa_od_1, G = G_usa, centered = T),
+  gravity_model(x = as.matrix(spdf_usa@data$x), 
+                Y = Y_usa_od_1, G = G_usa),
+  lm(y_1 ~ x_d + x_o + g, data = flows_usa),
+  gravity_model(x = as.matrix(spdf_usa@data$x), intra_x = T, 
+                Y = Y_usa_od_1, G = G_usa),
+  times = 1000L
+)
+```
+
 
 
 
@@ -982,7 +1283,7 @@ load("time_bayes_mod2.RData")
 We compare the results with the *lagsarlm()* function and we remark that we obtain similar results :(results are obtained in less than 1s).
 
 ```{r, message = F}
-result_lagsarlm <- lagsarlm(y_2 ~ x_d + W_dx_d + x_o + W_ox_o + g, 
+result_lagsarlm <- lagsarlm(y_2 ~ x_d + W_dx_d + x_o + x_i +  W_ox_o + g, 
                             data = flows_au, 
                             mat2listw(W_au_d))
 summary(result_lagsarlm)

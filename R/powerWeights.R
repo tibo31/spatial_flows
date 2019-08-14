@@ -1,4 +1,4 @@
-powerWeights <- function (W, rho, order = 250, X, tol = .Machine$double.eps^(3/5)) {
+powerWeights <- function (W, rho, order = 100, X, tol = .Machine$double.eps^(3/5)) {
   timings <- list()
   #   .ptime_start <- proc.time()
   n <- dim(W)[1]
