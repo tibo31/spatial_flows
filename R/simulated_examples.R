@@ -1,14 +1,36 @@
-# Australia
+##################################
+# Australia
 n_au <- 8
 id_region_au <- c("NT", "QLD", "WA", "SA", 
                   "NSW", "ACT", "VIC", "TAS")
+# source : https://itt.abs.gov.au/itt/r.jsp?databyregion
 au_df <- data.frame(id = id_region_au,
                     x = c(20, 40, 7, 10, 30, 25, 15, 10),
+                    wage = c(56783, 47177, 52691, 46619, 49256, 64901, 48878, 46800),
+                    pop = c(247327, 5011216, 2595192, 1736422, 4988241, 420960, 4963349, 232606),
+                    age = c(32.6, 37.1, 36.6, 40, 37.5, 35, 35.6, 39.8),
                     row.names = "id")
+
+au_df$ln_wage <- log(au_df$wage) 
+au_df$ln_pop <- log(au_df$pop) 
+au_df$ln_age <- log(au_df$age) 
+
 sp_au <- SpatialPointsDataFrame(cbind(c(1, 2, 0, 1, 2, 3, 2, 3),
                                       c(3, 3, 2, 2, 2, 2, 1, 0)),
                                 au_df)
+au_flows <- matrix(c(771843, 20075, 35107, 4578, 8058, 2117, 2822, 9667,
+                     17523, 595782, 16172, 5023, 7485, 2573, 2370, 2440,
+                     28953, 16657, 616281, 4363, 9348, 2963, 3834, 2727,
+                     4292, 5907, 5363, 174941, 2983, 734, 1567, 764, 
+                     6273, 7339, 7589, 2258, 286941, 1351, 1572, 699, 
+                     1859, 2842, 2809, 628, 1590, 53427, 268, 295,
+                     2832, 2619, 5253, 2664, 2469, 444, 23045, 478, 
+                     8389, 2471, 2852, 548, 700, 221, 376, 36373), 8, 8,
+                   dimnames = list(c("NSW", "VIC", "QLD", "SA", "WA", "TAS", "NT", "ACT"), 
+                                   c("NSW", "VIC", "QLD", "SA", "WA", "TAS", "NT", "ACT"))
+)
 
+##################################
 # Germany
 id_region_ge <- c("SH", "HH", "MV", "NW", "HB", "BB", "BE", "RP", 
                   "NI", "ST", "SN", "SL", "HE", "TH", "BW", "BY")
@@ -20,6 +42,7 @@ x_ge <- c(1, 1, 2, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 1, 2)
 y_ge <- c(5, 4, 4, 3, 3, 3, 3, 2, 2, 2, 2, 1, 1, 1, 0, 0)
 sp_ge <- SpatialPointsDataFrame(cbind(x_ge, y_ge), ge_df)
 
+##################################
 # USA
 id_region_usa <- c("AK", "ME", "WI", "VT", "NH", "WA", "ID", "MT", "ND", 
                    "MN", "IL", "MI", "NY", "MA", "OR", "NV", "WY", "SD", 
@@ -39,6 +62,7 @@ y_usa <- c(7, 7, rep(6, 3), rep(5, 9), rep(4, 11), rep(3, 10),
            rep(2, 8), rep(1, 5), rep(0, 3))
 sp_usa <- SpatialPointsDataFrame(cbind(x_usa, y_usa), usa_df)
 
+##################################
 # grid
 # origin
 x_grid_o <- rep(0:5, 5)
@@ -70,7 +94,7 @@ create_grid <- function(sp_centroid) {
   grd <- SpatialGrid(gt)
   spix <- as(grd, "SpatialPixels")
   spol <- as(spix, "SpatialPolygons")
-  o <- over(spol, sp_centroid)
+  o <- over(spol, sp_centroid)[, 1]
   simu_spdf <- spol[!is.na(o), ]
   row.names(simu_spdf) <- id
   simu_spdf <- SpatialPolygonsDataFrame(simu_spdf, sp_centroid@data) 
@@ -88,3 +112,35 @@ spdf_ge$NOM <- row.names(spdf_ge)
 spdf_usa$NOM <- row.names(spdf_usa)
 spdf_grid_o$NOM <- row.names(spdf_grid_o)
 spdf_grid_d$NOM <- row.names(spdf_grid_d)
+
+
+# # Big data 
+# # Australia
+# n_big <- 5000
+# id_region_big <- as.character(1:n_big)
+# # source : https://itt.abs.gov.au/itt/r.jsp?databyregion
+# au_big <- data.frame(id = id_region_big,
+#                     x1 = rnorm(n_big),
+#                     x2 = rbinom(n_big, size = 1000, prob = 0.5),
+#                     row.names = "id")
+# flows_big_d <- sapply(au_big[, c("x1", "x2")], 
+#                      function (x) kronecker(rep(1, n_big), x))
+# colnames(flows_big_d) <- paste0(colnames(flows_big_d), "_d")
+# 
+# flows_big_o <- sapply(au_big[, c("x1", "x2")], 
+#                      function (x) kronecker(x, rep(1, n_big)))
+# colnames(flows_big_o) <- paste0(colnames(flows_big_o), "_o")
+# 
+# flows_big <- as.data.frame(cbind(flows_big_d, flows_big_o))
+# y_big <- as.matrix(cbind(1, flows_big)) %*% c(1, 2, 3, 4, 5)
+# flows_big$g <- log(1:n_big ^ 2)
+# flows_big[, "y"] <- as.vector(y_big) - 10 * flows_big$g + rnorm(n_big ^ 2)
+# 
+# system.time(lm(y ~ x1_d + x2_d + x1_o + x2_o + g, data = flows_big))
+# 
+# Y_big <- matrix(flows_big$y, n_big, n_big)
+# G_big <- matrix(flows_big$g, n_big, n_big)
+# 
+# system.time(
+#   gravity_model(au_big, Y_big, G_big, centered = F)
+# )
