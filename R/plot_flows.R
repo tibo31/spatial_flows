@@ -245,8 +245,8 @@ plot_flows <- function(y, index_o, index_d, type_plot = "flow_map",
     # width of the flows
     maxlwd <- maxlwd * y / max(y, na.rm = T)
     # vector of colors for the flows
-    my_col_flow <- q4[as.numeric(as.factor(index_o))] 
-    my_col_bar <- q4[as.numeric(as.factor(O))]
+    my_col_flow <- q4[as.numeric(factor(index_o, levels = order_S))] 
+    my_col_bar <- q4[as.numeric(factor(O, levels = order_S))]
     
     # parameter to shift the destination barplot
     shift <- 1 / 50
