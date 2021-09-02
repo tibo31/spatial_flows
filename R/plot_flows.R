@@ -1,16 +1,18 @@
 plot_flows <- function(y, index_o, index_d, type_plot = "flow_map", 
-                       xy_sf = NULL, contours_map = xy_sf, rank_S = T,
+                       xy_sf = NULL, contours_map = xy_sf, ordering = "distance",
                        sankey.options = list(
                          labels_od = c("origin", "destination"),
                          ylab = "",
-                         title = ""),
+                         title = "",
+                         nrows = 3),
                        arc.options = list(
                          maxcex = 1,
-                         maxlwd = 1
+                         maxlwd = 1,
+                         alpha.q = 0.75
                        ),
                        flow_map.options = list(
                          maxlwd = 1,
-                         alpha.q = 0.85,
+                         alpha.q = 0.75,
                          max_bar = 1,
                          round.values = 0
                        ),
@@ -19,7 +21,7 @@ plot_flows <- function(y, index_o, index_d, type_plot = "flow_map",
                          scale_xy = c(-1/20, - 1),
                          maxsize = 1,
                          maxlwd = 1,
-                         alpha.q = 0.8,
+                         alpha.q = 0.75,
                          max_bar = 1.5,
                          title.legend = "Outflows/Inflows",
                          quantiles.legend = c(0.2, 0.4, 0.6, 0.8, 0.95)
@@ -28,6 +30,14 @@ plot_flows <- function(y, index_o, index_d, type_plot = "flow_map",
                          style_class = "kmeans",
                          n.class = 7,
                          title = "")) {
+  
+  # verification
+  stopifnot(ordering %in% c("none", 
+                            "longitude", 
+                            "latitude", 
+                            "descending",
+                            "clustering",
+                            "distance"))
   
   # Install packages if not already installed
   if (!require(colorspace)) {
@@ -73,7 +83,7 @@ plot_flows <- function(y, index_o, index_d, type_plot = "flow_map",
   }
   
   # Order the sites S : Y or N
-  if (rank_S) {
+  if (ordering == "distance") {
     stopifnot(!is.null(xy_sf))
     mat_distance <- st_distance(xy_sf)
     my_index <- 1
@@ -89,7 +99,30 @@ plot_flows <- function(y, index_o, index_d, type_plot = "flow_map",
     }
     order_S <- xy_sf$S[na.omit(my_index)] 
   } else {
-    order_S <- S
+    if (ordering == "longitude") {
+      order_S <- xy_sf$S[order(st_coordinates(xy_sf)[, 1])]
+    } else {
+      if (ordering == "latitude") {
+        order_S <- xy_sf$S[order(st_coordinates(xy_sf)[, 2])]
+      } else {
+        if (ordering == "descending") {
+          order_O <- O[order(outflows[O])]
+          order_D <- D[order(inflows[D])]
+          order_S <- S[order(outflows + inflows)]
+        } else {
+          if (ordering == "clustering") {
+            clust_origin <- hclust(dist(Y))
+            clust_dest <- hclust(dist(t(Y)))
+            clust_both <- hclust(dist(cbind(Y_s, t(Y_s))))
+            order_O <- O[clust_origin$order]
+            order_D <- D[clust_dest$order]
+            order_S <- S[clust_both$order]
+          } else {
+            order_S <- S  
+          }
+        }
+      }
+    } 
   }
   
   ######  Sankey Diagram 
@@ -99,6 +132,27 @@ plot_flows <- function(y, index_o, index_d, type_plot = "flow_map",
       install.packages("ggalluvial")
       library(ggalluvial)
     }
+    
+    # the optional argument
+    if(is.null(sankey.options$labels_od)) 
+      labels_od <- c("origin", "destination")
+    else
+      labels_od <- sankey.options$labels_od
+    
+    if(is.null(sankey.options$ylab)) 
+      ylab <- ""
+    else
+      ylab <- sankey.options$ylab
+    
+    if(is.null(sankey.options$title)) 
+      title <- ""
+    else
+      title <- sankey.options$title
+  
+    if(is.null(sankey.options$nrows)) 
+      nrows <- 3
+    else
+      nrows <- sankey.options$nrows
     
     # preparation of the data
     data_long_2 <- data.frame(
@@ -113,20 +167,45 @@ plot_flows <- function(y, index_o, index_d, type_plot = "flow_map",
                                 names_to = "survey", values_to = "response")
     # we use factor
     data_long_2$survey <- factor(data_long_2$survey, levels = c("index_o", "index_d"),
-                                 labels = sankey.options$labels_od)
+                                 labels = labels_od)
     
-    data_long_2$zone <- factor(data_long_2$response, levels = order_S)
+    if (ordering %in% c("descending", "clustering")) {
+      special_levels_1 <- order_O 
+      data_long_2$names_flow <- paste0(data_long_2$names_flow, " ")
+      boolScale <- scale_fill_manual(name = "Zone", values = rev(q4[order_O]))
+    } else {
+      special_levels_1 <- (order_S)
+      boolScale <- scale_fill_manual(name = "Zone", values = rev(q4[order_S]))
+      
+    }
+    
+    data_long_2$zone <- factor(data_long_2$response, levels = special_levels_1)
+    
+    if (ordering %in% c("descending", "clustering")) {
+      special_levels_2 <- c((order_O), (paste0(order_D, " ")))
+      data_long_2$zone2 <- ifelse(data_long_2$survey == labels_od[1], 
+                                  as.character(data_long_2$zone), paste0(data_long_2$zone, " "))
+    } else {
+      special_levels_2 <- order_S
+      data_long_2$zone2 <- data_long_2$zone
+    }
+    
+    data_long_2$zone2 <- factor(data_long_2$zone2, 
+                                levels = special_levels_2)
+    
     p <- ggplot(data_long_2,
-                aes(x = survey, stratum = zone, alluvium = names_flow,
+                aes(x = survey, stratum = zone2, alluvium = names_flow,
                     y = y, fill = zone, label = zone)) +
+      boolScale +
       scale_x_discrete(expand = c(.1, .1)) +
       geom_flow() +
-      geom_stratum(alpha = .5) +
+      geom_stratum(alpha = .5) + 
+      guides(fill = guide_legend(nrow = nrows, byrow = T)) +
       theme(legend.position = "bottom") +
       coord_flip() +
       xlab("") +
-      ylab(sankey.options$ylab) +
-      ggtitle(sankey.options$title)
+      ylab(ylab) +
+      ggtitle(title)
     print(p)
   }
   
@@ -136,7 +215,7 @@ plot_flows <- function(y, index_o, index_d, type_plot = "flow_map",
       library(circlize)
     }
     circos.clear()
-    circos.par(start.degree = 90, gap.degree = 4)
+    circos.par(start.degree = 90, gap.degree = 60 / n)
     chordDiagram(x = Y, directional = 1, order = order_S, grid.col = q4, 
                  annotationTrack = "grid",
                  transparency = 0.25, annotationTrackHeight = c(0.1, 0.1),
@@ -167,23 +246,46 @@ plot_flows <- function(y, index_o, index_d, type_plot = "flow_map",
       devtools::install_github('gastonstat/arcdiagram')   # Arc diagram plot
       library(arcdiagram)
     }
-    maxcex <- 15 * arc.options$maxcex
-    maxlwd <- 15 * arc.options$maxlwd
+    
+    # modification of the arcdiagram function
+    source("https://raw.githubusercontent.com/tibo31/spatial_flows/master/R/arcdiagram.R")
+    
+    # preparation of the options
+    if(is.null(arc.options$maxcex)) 
+      maxcex <- 15 
+    else
+      maxcex <- 15 * arc.options$maxcex
+    
+    if(is.null(arc.options$maxlwd))
+      maxlwd <- 15 
+    else
+      maxlwd <- 15 * arc.options$maxlwd
+    
+    if(is.null(arc.options$alpha.q))
+      alpha.q <- 0.75
+    else
+      alpha.q <- arc.options$alpha.q
+    
     # create the adjacency matrix
-    star_graph <- graph_from_adjacency_matrix(Y_s, weighted = T)
-    star_edges <- get.edgelist(star_graph)
+    # create the graph
+    nodes <- data.frame(S = order_S, outflows = outflows[order_S], inflows = inflows[order_S])
+    relations <- data.frame(from = index_o, to = index_d, y = y)
+    g <- graph_from_data_frame(relations, directed = TRUE, vertices = nodes)
+    # create the adjacency matrix
+    star_edges <- get.edgelist(g)
+    
     # compute the size of each nodes
-    lwd.nodes <- apply(Y_s, 1, function(x) sum(x, na.rm = T)) +
-      apply(Y_s, 2, function(x) sum(x, na.rm = T))
+    lwd.nodes <- outflows[order_S] + inflows[order_S]
     lwd.nodes <- maxcex * lwd.nodes / max(lwd.nodes)
     # compute the width of the arcs
-    lwd.arcs <- as.vector(maxlwd * t(Y_s) / max((Y_s), na.rm = T))
+    lwd.arcs <- as.vector(maxlwd * y / max(y, na.rm = T))
     # compute the colors of the arcs
-    col.arcs <- rep(q4, each = length(q4))
-    arcplot(star_edges, lwd.arcs = lwd.arcs,
-            col.arcs = col.arcs,
+    col.arcs <- q4[star_edges[, 1]] 
+
+    arcplot(star_edges[y > quantile(y, alpha.q),], lwd.arcs = lwd.arcs[y > quantile(y, alpha.q)],
+            col.arcs = col.arcs[y > quantile(y, alpha.q)], ordering = order_S,
             show.nodes = TRUE, pch.nodes = 21,
-            col.nodes = q4, bg.nodes = q4, lwd.nodes = lwd.nodes,
+            col.nodes = q4[order_S], bg.nodes = q4[order_S], lwd.nodes = lwd.nodes,
             las = 2, font = 1, cex.labels = 0.9, col.labels = rgb(0.3, 0.3, 0.3))
   }
   
@@ -235,13 +337,27 @@ plot_flows <- function(y, index_o, index_d, type_plot = "flow_map",
   
   if (type_plot == "flow_map") {
     
-    maxlwd <- flow_map.options$maxlwd * 7
-    # values of the quantile for representing the biggest flows
-    alpha.q <- flow_map.options$alpha.q 
-    # height of the bar
-    max_bar <- flow_map.options$max_bar * 1.8
-    # legend
-    round.values <- flow_map.options$round.values
+    # initialisation 
+    if (is.null(flow_map.options$maxlwd))
+      maxlwd <- 1 * 7
+    else
+      maxlwd <- flow_map.options$maxlwd * 7
+      
+    if (is.null(flow_map.options$alpha.q))
+      alpha.q <- 0.85
+    else
+      alpha.q <- flow_map.options$alpha.q
+    
+    if (is.null(flow_map.options$max_bar))
+      max_bar <- 1 * 1.8
+    else
+      max_bar <- flow_map.options$max_bar * 1.8
+    
+    if (is.null(flow_map.options$round.values))
+      round.values <- 0
+    else
+      round.values <- flow_map.options$round.values
+    
     # width of the flows
     maxlwd <- maxlwd * y / max(y, na.rm = T)
     # vector of colors for the flows
@@ -389,23 +505,55 @@ plot_flows <- function(y, index_o, index_d, type_plot = "flow_map",
   }
   
   if (type_plot == "griffith") {
-    
+ 
+     
     # round the values in the legend
-    round.label <- griffith.options$round.label
+    if(is.null(griffith.options$round.label))
+      round.label <- 0
+    else
+      round.label <- griffith.options$round.label
+    
     # shift origin
-    scale_xy <- griffith.options$scale_xy
+    if(is.null(griffith.options$scale_xy))
+      scale_xy <- c(-1/20, - 1)
+    else
+      scale_xy <- griffith.options$scale_xy
+    
     # maxsize of the bubbles
-    maxsize <- griffith.options$maxsize * 5
+    if(is.null(griffith.options$maxsize))
+      maxsize <- 5
+    else
+      maxsize <- griffith.options$maxsize * 5
     maxsize <- maxsize / max(sqrt(c(inflows, outflows)), na.rm = T)
+    
     # maximum size of the width
-    maxlwd <- griffith.options$maxlwd * 10
+    if(is.null(griffith.options$maxlwd))
+      maxlwd <- 10
+    else
+      maxlwd <- griffith.options$maxlwd * 10
+
     # values of griffith.options quantile for representing the biggest flows
-    alpha.q <- griffith.options$alpha.q
+    if(is.null(griffith.options$alpha.q))
+      alpha.q <- 0.75
+    else
+      alpha.q <- griffith.options$alpha.q
+    
     # height of the bar
-    max_bar <- griffith.options$max_bar
+    if(is.null(griffith.options$max_bar))
+      max_bar <- 1.5
+    else
+      max_bar <- griffith.options$max_bar
+    
     # legend 
-    title.legend <- griffith.options$title.legend
-    quantiles.legend <- griffith.options$quantiles.legend
+    if(is.null(griffith.options$title.legend))
+      title.legend <- "Outflows/Inflows"
+    else
+      title.legend <- griffith.options$title.legend
+    
+    if(is.null(griffith.options$quantiles.legend))
+      quantiles.legend <- c(0.2, 0.4, 0.6, 0.8, 0.95)
+    else
+      quantiles.legend <- griffith.options$quantiles.legend
     
     # width of the flows
     maxlwd <- maxlwd * y / max(y, na.rm = T)
