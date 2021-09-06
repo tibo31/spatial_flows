@@ -14,7 +14,9 @@ plot_flows <- function(y, index_o, index_d, type_plot = "flow_map",
                          maxlwd = 1,
                          alpha.q = 0.75,
                          max_bar = 1,
-                         round.values = 0
+                         round.values = 0,
+                         col_geometry = "lightgrey" , 
+                         col_border = "white"
                        ),
                        griffith.options = list(
                          round.label = 0,
@@ -24,7 +26,11 @@ plot_flows <- function(y, index_o, index_d, type_plot = "flow_map",
                          alpha.q = 0.75,
                          max_bar = 1.5,
                          title.legend = "Outflows/Inflows",
-                         quantiles.legend = c(0.2, 0.4, 0.6, 0.8, 0.95)
+                         quantiles.legend = c(0.2, 0.4, 0.6, 0.8, 0.95),
+                         col_geometry_o = "lightgrey" , 
+                         col_border_o = "white",
+                         col_geometry_d = "lightgrey" , 
+                         col_border_d = "white"
                        ),
                        heatmap.options = list(
                          style_class = "kmeans",
@@ -96,12 +102,18 @@ plot_flows <- function(y, index_o, index_d, type_plot = "flow_map",
       my_index <- c(my_index, my_choice)
     }
     order_S <- xy_sf$S[na.omit(my_index)] 
+    order_O <- order_S[order_S %in% O]
+    order_D <- order_S[order_S %in% D]
   } else {
     if (ordering == "longitude") {
       order_S <- xy_sf$S[order(st_coordinates(xy_sf)[, 1])]
+      order_O <- order_S[order_S %in% O]
+      order_D <- order_S[order_S %in% D]
     } else {
       if (ordering == "latitude") {
         order_S <- xy_sf$S[order(st_coordinates(xy_sf)[, 2])]
+        order_O <- order_S[order_S %in% O]
+        order_D <- order_S[order_S %in% D]
       } else {
         if (ordering == "descending") {
           order_O <- O[order(outflows[O])]
@@ -116,7 +128,9 @@ plot_flows <- function(y, index_o, index_d, type_plot = "flow_map",
             order_D <- D[clust_dest$order]
             order_S <- S[clust_both$order]
           } else {
-            order_S <- S  
+            order_S <- S 
+            order_O <- O
+            order_D <- D
           }
         }
       }
@@ -181,7 +195,7 @@ plot_flows <- function(y, index_o, index_d, type_plot = "flow_map",
       
     }
     
-    data_long_2$zone <- factor(data_long_2$response, levels = special_levels_1)
+    data_long_2$zone <- factor(data_long_2$response, levels = rev(special_levels_1))
     
     if (ordering %in% c("descending", "clustering")) {
       special_levels_2 <- c((order_O), (paste0(order_D, " ")))
@@ -362,6 +376,16 @@ plot_flows <- function(y, index_o, index_d, type_plot = "flow_map",
     else
       round.values <- flow_map.options$round.values
     
+    if (is.null(flow_map.options$col_geometry))
+      col_geometry <- "lightgrey" 
+    else
+      col_geometry <- flow_map.options$col_geometry
+    
+    if (is.null(flow_map.options$col_border))
+      col_border <- "white" 
+    else
+      col_border <- flow_map.options$col_border    
+    
     # width of the flows
     maxlwd <- maxlwd * y / max(y, na.rm = T)
     # vector of colors for the flows
@@ -397,7 +421,9 @@ plot_flows <- function(y, index_o, index_d, type_plot = "flow_map",
     
     # pdf("figures/map.pdf", width = 8, height = 8)
     # par(oma = c(0, 0, 0, 0), mar = c(0, 0, 0, 0))
-    plot(st_geometry(contours_map), border = "lightgrey", lwd = 0.5)
+    plot(st_geometry(contours_map), 
+         col = col_geometry,
+         border = col_border, lwd = 0.2)
     
     # vectorial version 
     # plot the highest flows
@@ -510,7 +536,6 @@ plot_flows <- function(y, index_o, index_d, type_plot = "flow_map",
   
   if (type_plot == "griffith") {
  
-     
     # round the values in the legend
     if(is.null(griffith.options$round.label))
       round.label <- 0
@@ -559,11 +584,32 @@ plot_flows <- function(y, index_o, index_d, type_plot = "flow_map",
     else
       quantiles.legend <- griffith.options$quantiles.legend
     
+    if (is.null(griffith.options$col_geometry_o))
+      col_geometry_o <- "lightgrey" 
+    else
+      col_geometry_o <- griffith.options$col_geometry_o
+    
+    if (is.null(griffith.options$col_border_o))
+      col_border_o <- "white" 
+    else
+      col_border_o <- griffith.options$col_border_o   
+    
+    if (is.null(griffith.options$col_geometry_d))
+      col_geometry_d  <- "lightgrey" 
+    else
+      col_geometry_d  <- griffith.options$col_geometry_d 
+    
+    if (is.null(griffith.options$col_border_d))
+      col_border_d  <- "white" 
+    else
+      col_border_d  <- griffith.options$col_border_d  
+    
     # width of the flows
     maxlwd <- maxlwd * y / max(y, na.rm = T)
+    
     # vector of colors for the flows
-    my_col_flow <- q4[as.numeric(as.factor(index_o))] 
-    my_col_bar <- q4[as.numeric(as.factor(O))]
+    my_col_flow <- q4[as.character(index_o)] 
+
     # create two contours : one for origin, another for destination
     poly_sf_o <- contours_map
     xy_sf_o <- xy_sf
@@ -575,8 +621,9 @@ plot_flows <- function(y, index_o, index_d, type_plot = "flow_map",
     
     plot(st_geometry(poly_sf_o),  
          xlim = range(c(st_bbox(poly_sf_o)[c(1, 3)], st_bbox(poly_sf_d)[c(1, 3)])),
-         ylim = range(c(st_bbox(poly_sf_o)[c(2, 4)], st_bbox(poly_sf_d)[c(2, 4)])))
-    plot(poly_sf_d, add = T, border = "lightgrey")
+         ylim = range(c(st_bbox(poly_sf_o)[c(2, 4)], st_bbox(poly_sf_d)[c(2, 4)])),
+         col = col_geometry_o, border = col_border_o)
+    plot(poly_sf_d, add = T, col = col_geometry_d, border = col_border_d)
     
     # new coordinates of the origin sites
     xy_coord <- st_coordinates(xy_sf_o)
@@ -586,13 +633,14 @@ plot_flows <- function(y, index_o, index_d, type_plot = "flow_map",
     xy_coord <- st_coordinates(xy_sf_d)
     rownames(xy_coord) <- xy_sf$S
     xy_dest <- xy_coord[D, ]
+    
     # print the bubbles
-    points(xy_origin, 
+    points(xy_origin[O, ], 
            cex = maxsize * sqrt(abs(outflows[O])), 
            pch = 16, 
            col = q4[O])
     
-    points(xy_dest, 
+    points(xy_dest[D, ], 
            cex = maxsize * sqrt(abs(inflows[D])),  
            pch = 16, 
            col = q4[D])
@@ -641,176 +689,54 @@ plot_flows <- function(y, index_o, index_d, type_plot = "flow_map",
       install.packages("viridis")
       library(viridis)
     }
+    if (!require(plot.matrix)) {
+      install.packages("plot.matrix")
+      library(plot.matrix)
+    }
     
-    gplots::heatmap.2(Y, col = rev(magma(7)), 
+    
+    if(is.null(heatmap.options$title))
+      title <- ""
+    else
+      title <- heatmap.options$title
+    
+    if (is.null(heatmap.options$n.class))
+      n.class <- 7
+    else
+      n.class <- heatmap.options$n.class
+    
+    if (is.null(heatmap.options$style_class))
+      style_class <- "kmeans" 
+    else
+      style_class <- heatmap.options$style_class   
+    
+
+    
+    if (ordering == "clustering") {
+      gplots::heatmap.2(Y, col = rev(magma(7)), 
                       breaks = classInt::classIntervals(as.numeric(Y), 
-                                                        style  = heatmap.options$style_class, 
-                                                        n = heatmap.options$n.class)$brks,
+                                                        style  = style_class, 
+                                                        n = n.class)$brks,
                       key = FALSE,
                       srtRow = -50,     # angle
                       srtCol = 30,      # angle
                       trace= "none",
-                      main = heatmap.options$title)
+                      main = title)
+    } else {
+      Y_permut_2 <- Y[order_O, order_D]
+      plot(Y_permut_2,
+           na.cell = F,
+           axis.col = list(cex.axis = 0.01), axis.row = list(cex.axis = 0.85),
+           breaks = classInt::classIntervals(as.numeric(Y_permut_2), 
+                                             style  = style_class, n = n.class)$brks, 
+           col = rev(magma(7)), main = title, 
+           xlab = "",
+           ylab = "")
+      
+      text(seq(1, length(D), by = 1), par("usr")[3] - 1, 
+           srt = 60, adj = 1, xpd = TRUE,
+           labels = colnames(Y_permut_2), cex = 0.85)
+    }
   }
   
-}
-
-# modification of the function arcdiagram (Sanchez, 2018)
-# to be adapted for a matrix of flows 
-arcplot_b <- function (edgelist, vertices, sorted = FALSE, decreasing = FALSE, 
-                       ordering = NULL, labels = NULL, horizontal = TRUE, above = NULL, 
-                       col.arcs = "#5998ff77", lwd.arcs = 1.8, lty.arcs = 1, lend = 1, 
-                       ljoin = 2, lmitre = 1, show.nodes = TRUE, pch.nodes = 19, 
-                       cex.nodes = 1, col.nodes = "gray80", bg.nodes = "gray80", 
-                       lwd.nodes = 1, show.labels = TRUE, col.labels = "gray55", 
-                       cex.labels = 0.9, las = 2, font = 1, line = 0, outer = FALSE, 
-                       adj = NA, padj = NA, axes = FALSE, xlim = NULL, ylim = NULL, 
-                       ...) {
-  if (hasArg(vertices)) {
-    nodes_edges = graph_info(edgelist, vertices = vertices, 
-                             sorted = sorted, decreasing = decreasing, ordering = ordering, 
-                             labels = labels)
-  }
-  else {
-    nodes_edges = graph_info(edgelist, sorted = sorted, decreasing = decreasing, 
-                             ordering = ordering, labels = labels)
-  }
-  nodes = nodes_edges$nodes
-  num_nodes = nodes_edges$num_nodes
-  num_edges = nodes_edges$num_edges
-  aux_ord = nodes_edges$aux_ord
-  labels = nodes_edges$labels
-  aux_ord <- 1:num_nodes
-  centers = xynodes(num_nodes, aux_ord, labels)
-  above = above_below(edgelist, above)
-  radios_locs = arc_radius_locs(edgelist, nodes, centers)
-  radios = radios_locs$radios
-  locs = radios_locs$locs
-  if (length(col.arcs) != num_edges) 
-    col.arcs = rep(col.arcs, length = num_edges)
-  if (length(lwd.arcs) != num_edges) 
-    lwd.arcs = rep(lwd.arcs, length = num_edges)
-  if (length(lty.arcs) != num_edges) 
-    lty.arcs = rep(lty.arcs, length = num_edges)
-  if (length(pch.nodes) != num_nodes) {
-    pch.nodes = rep(pch.nodes, length = num_nodes)
-  }
-  pch.nodes = pch.nodes[aux_ord]
-  if (length(cex.nodes) != num_nodes) {
-    cex.nodes = rep(cex.nodes, length = num_nodes)
-  }
-  cex.nodes = cex.nodes[aux_ord]
-  if (length(col.nodes) != num_nodes) {
-    col.nodes = rep(col.nodes, length = num_nodes)
-  }
-  col.nodes = col.nodes[aux_ord]
-  if (length(bg.nodes) != num_nodes) {
-    bg.nodes = rep(bg.nodes, length = num_nodes)
-  }
-  bg.nodes = bg.nodes[aux_ord]
-  if (length(lwd.nodes) != num_nodes) {
-    lwd.nodes = rep(lwd.nodes, length = num_nodes)
-  }
-  lwd.nodes = lwd.nodes[aux_ord]
-  if (length(col.labels) != num_nodes) {
-    col.labels = rep(col.labels, length = num_nodes)
-  }
-  col.labels = col.labels[aux_ord]
-  if (length(cex.labels) != num_nodes) {
-    cex.labels = rep(cex.labels, length = num_nodes)
-  }
-  cex.labels = cex.labels[aux_ord]
-  z = seq(0, pi, length.out = 100)
-  if (horizontal) {
-    side = 1
-  }
-  else {
-    side = 2
-  }
-  if (is.null(xlim)) {
-    if (horizontal) {
-      xlim = c(-0.015, 1.015)
-      x_nodes = centers
-    }
-    else {
-      xlims = min_max_margin(radios, above)
-      xlim = c(xlims$min, xlims$max)
-      x_nodes = rep(0, num_nodes)
-    }
-  }
-  else {
-    if (horizontal) {
-      x_nodes = centers
-    }
-    else {
-      x_nodes = rep(0, num_nodes)
-    }
-  }
-  if (is.null(ylim)) {
-    if (horizontal) {
-      ylims = min_max_margin(radios, above)
-      ylim = c(ylims$min, ylims$max)
-      y_nodes = rep(0, num_nodes)
-    }
-    else {
-      ylim = c(-0.015, 1.015)
-      y_nodes = centers
-    }
-  }
-  else {
-    if (horizontal) {
-      y_nodes = rep(0, num_nodes)
-    }
-    else {
-      y_nodes = centers
-    }
-  }
-  plot(0.5, 0.5, xlim = xlim, ylim = ylim, type = "n", xlab = "", 
-       ylab = "", axes = axes, ...)
-  for (i in 1L:num_edges) {
-    radio = radios[i]
-    if (horizontal) {
-      x_arc = locs[i] + radio * cos(z)
-      if (above[i]) {
-        y_arc = radio * sin(z)
-      }
-      else {
-        y_arc = radio * sin(-z)
-      }
-    }
-    else {
-      y_arc = locs[i] + radio * cos(z)
-      if (above[i]) {
-        x_arc = radio * sin(z)
-      }
-      else {
-        x_arc = radio * sin(-z)
-      }
-    }
-    lines(x_arc, y_arc, col = col.arcs[i], lwd = lwd.arcs[i], 
-          lty = lty.arcs[i], lend = lend, ljoin = ljoin, lmitre = lmitre)
-    if (show.nodes) {
-      points(x = x_nodes, y = y_nodes, pch = pch.nodes, 
-             col = col.nodes, bg = bg.nodes, cex = cex.nodes, 
-             lwd = lwd.nodes)
-    }
-    if (show.labels) {
-      #mtext(labels, side = side, line = line, at = centers, 
-      #      cex = cex.labels, outer = outer, col = col.labels, 
-      #      las = las, font = font, adj = adj, padj = padj, 
-      #      ...)
-      text(centers, -0.04, labels, pos = 2, cex = cex.labels, srt = 45,       # rotation des étiquettes
-           xpd = T)
-    }
-    # plot the intra flow
-    if (edgelist[i, 1] == edgelist[i, 2]) {
-      R <- diff(centers)[1] / 5 
-      x_0 <- c(0, -0.01, -0.015, -0.017, -0.018, -0.0185, -0.0185, -0.018, -0.017, -0.015, -0.01, -0.005, 
-               0.005, .01, 0.015, 0.017, 0.018, 0.0185, 0.0185, 0.018, 0.017, 0.015, 0.01, 0)
-      x_0 <- centers[edgelist[i, 1]] + x_0 * R / max(x_0)
-      y_0 <- c(seq(0, -0.04, length.out = 12), seq(-0.04, 0, length.out = 12))
-      lines(x_0, y_0, xpd = T, col = col.arcs[i], lwd = lwd.arcs[i], 
-            lty = lty.arcs[i])
-    }
-  }
 }
